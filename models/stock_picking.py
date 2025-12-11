@@ -4,7 +4,7 @@ from odoo import models, api, fields, _
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
-    owner_ids = fields.Many2many(
+    owner_id = fields.Many2many(
         'res.partner',
         'stock_picking_owner_rel',
         'picking_id',
@@ -19,16 +19,19 @@ class StockPicking(models.Model):
 
         if picking.move_ids:
             owners = picking.move_ids.mapped('owner_id')
-            picking.owner_ids = [(6, 0, owners.ids)]
+            picking.with_context(skip_owner_sync=True).owner_id = [(6, 0, owners.ids)]
 
         return picking
 
     def write(self, vals):
         res = super().write(vals)
 
+        if self.env.context.get('skip_owner_sync'):
+            return res
+
         for picking in self:
             owners = picking.move_ids.mapped('owner_id')
 
-            picking.owner_ids = [(6, 0, owners.ids)]
+            picking.with_context(skip_owner_sync=True).owner_id = [(6, 0, owners.ids)]
 
         return res
