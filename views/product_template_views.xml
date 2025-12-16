@@ -6,7 +6,7 @@
         <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='sales_person_ids']" position="before">
-                <field name="owner_id" string="Sale Person" options="{'no_create': True}"/>
+                <field name="owner_id" string="Pemilik" options="{'no_create': True}"/>
             </xpath>
         </field>
     </record>
@@ -18,7 +18,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//field[@name='sales_person_ids']" position="attributes">
-                <attribute name="string">Pemilik</attribute>
+                <attribute name="string">Sales</attribute>
                 <attribute name="widget">many2many_tags</attribute>
                 <attribute name="options">{'no_create': True}</attribute>
             </xpath>

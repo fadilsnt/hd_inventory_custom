@@ -9,6 +9,9 @@
                 <field name="sales_person_ids" string="Sale Persons" widget="many2many_tags" options="{'no_create': True}"/>
                 <field name="owner_id" string="Pemilik" options="{'no_create': True}"/>
             </xpath>
+            <xpath expr="//field[@name='owner_id']" position="after">
+                <field name="pemilik_ids" widget="many2many_tags" readonly="1"/>
+            </xpath>
         </field>
     </record>   
 
