@@ -8,7 +8,7 @@ class StockPicking(models.Model):
         'res.partner',
         'stock_picking_owner_rel',
         'picking_id',
-        'partner_id',
+        'owner_id',
         string="Owners",
         help="Owner yang terlibat pada stock move."
     )
