@@ -1,2 +1,2 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_hd_inventory_custom_hd_inventory_custom,hd_inventory_custom.hd_inventory_custom,model_hd_inventory_custom_hd_inventory_custom,base.group_user,1,1,1,1
+access_wizard_inventory_laporan_hari_pengganti_user,hd_inventory_custom.wizard.inventory.laporan.hari.pengganti,model_wizard_inventory_laporan_hari_pengganti,base.group_user,1,1,1,1

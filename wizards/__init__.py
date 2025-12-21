@@ -1,1 +1,1 @@
-from . import wizard_inventory_detail_product
+from . import wizard_inventory_laporan_hari_pengganti

@@ -12,11 +12,14 @@
     'support': "echovoid14@gmail.com",
     'category': 'Inventory',
     'version': '0.1',
-    'depends': ['base', 'product', 'stock', 'fjr_custom_stock', 'export_stock_report'],
+    'depends': ['base', 'product', 'stock', 'fjr_custom_stock', 'export_stock_report', 'report_xlsx'],
     'data': [
-        # 'security/ir.model.access.csv',
+        'security/ir.model.access.csv',
+        'wizards/wizard_inventory_laporan_hari_pengganti_view.xml',
         'views/product_template_views.xml',
         'views/stock_picking_views.xml',
+        'views/stock_move_line_inherit_view.xml',
+        'reports/report_action.xml',
     ],
     'phone': "085156534679",
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="inventory_laporan_hari_pengganti_xlsx" model="ir.actions.report">
+        <field name="name">Laporan Inventory Hari Pengganti</field>
+        <field name="model">wizard.inventory.laporan.hari.pengganti</field>
+        <field name="report_type">xlsx</field>
+        <field name="report_name">hd_inventory_custom.hari_pengganti_xlsx</field>
+        <field name="report_file">Laporan_Inventory_Hari_Pengganti</field>
+    </record>
+</odoo>

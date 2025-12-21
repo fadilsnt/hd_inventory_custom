@@ -1,0 +1,320 @@
+from odoo import models
+from datetime import datetime, date
+import re
+import logging
+
+_logger = logging.getLogger(__name__)
+
+def format_tanggal_indonesia(dt=None):
+    hari_map = {0: "SENIN", 1: "SELASA", 2: "RABU", 3: "KAMIS", 4: "JUMAT", 5: "SABTU", 6: "MINGGU"}
+    bulan_map = {1: "JANUARI", 2: "FEBRUARI", 3: "MARET", 4: "APRIL", 5: "MEI", 6: "JUNI", 
+                 7: "JULI", 8: "AGUSTUS", 9: "SEPTEMBER", 10: "OKTOBER", 11: "NOVEMBER", 12: "DESEMBER"}
+
+    if not dt:
+        dt = date.today()
+    elif isinstance(dt, str):
+        dt = datetime.strptime(dt, "%Y-%m-%d").date()
+
+    return "{} / {} {} {}".format(hari_map[dt.weekday()], dt.day, bulan_map[dt.month], dt.year)
+
+class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
+    _name = 'report.hd_inventory_custom.hari_pengganti_xlsx'
+    _inherit = 'report.report_xlsx.abstract'
+    _description = 'Laporan Inventory Hari Pengganti XLSX'
+    _auto = False 
+
+    def _get_data_xlsx_report(self, report_date, warehouse_id=None):
+        warehouse_filter = ""
+        params = {'report_date': report_date}
+        
+        if warehouse_id:
+            warehouse_filter = "AND sw.id = %(warehouse_id)s"
+            params['warehouse_id'] = warehouse_id
+
+        query = f"""
+            WITH base_data AS (
+                SELECT
+                    sw.name AS warehouse,
+                    sml.oven_number AS oven,
+                    pt.name->>'en_US' AS product,
+                    MAX(CASE WHEN pa.name->>'en_US' = 'Grade' THEN pav.name->>'en_US' END)
+                    || ' (' ||
+                    MAX(CASE WHEN pa.name->>'en_US' = 'BOX' THEN pav.name->>'en_US' END)
+                    || ')' AS classification,
+                    SUM(sml.quantity) AS qty
+                FROM stock_move_line sml
+                JOIN stock_move sm ON sml.move_id = sm.id
+                JOIN stock_picking sp ON sm.picking_id = sp.id
+                JOIN product_product pp ON sml.product_id = pp.id
+                JOIN product_template pt ON pp.product_tmpl_id = pt.id
+                JOIN product_variant_combination pvc ON pvc.product_product_id = pp.id
+                JOIN product_template_attribute_value ptav ON ptav.id = pvc.product_template_attribute_value_id
+                JOIN product_attribute pa ON pa.id = ptav.attribute_id
+                JOIN product_attribute_value pav ON pav.id = ptav.product_attribute_value_id
+                JOIN stock_location sl ON sl.id = sml.location_dest_id
+                JOIN stock_warehouse sw ON (sl.id = sw.view_location_id OR sl.parent_path LIKE '%%/' || sw.view_location_id || '/%%')
+                WHERE sp.scheduled_date::date = %(report_date)s
+                {warehouse_filter}
+                GROUP BY sw.name, sml.oven_number, pt.name->>'en_US'
+            ),
+            oven_group AS (
+                SELECT
+                    warehouse,
+                    oven,
+                    classification,
+                    json_agg(
+                        json_build_object(
+                            'product', product,
+                            'qty', qty
+                        ) ORDER BY product
+                    ) AS products,
+                    SUM(qty) AS total_per_oven
+                FROM base_data
+                GROUP BY warehouse, oven, classification
+            ),
+            total_per_grade_cte AS (
+                SELECT
+                    warehouse,
+                    COALESCE(classification,'UNCLASSIFIED') AS classification,
+                    SUM(total_per_oven) AS total_per_grade
+                FROM oven_group
+                GROUP BY warehouse, COALESCE(classification,'UNCLASSIFIED')
+            ),
+            warehouse_group AS (
+                SELECT
+                    og.warehouse,
+                    json_agg(
+                        json_build_object(
+                            'oven', og.oven,
+                            'classification', og.classification,
+                            'products', og.products,
+                            'total_per_oven', og.total_per_oven
+                        )
+                        ORDER BY og.oven
+                    ) AS ovens,
+                    json_object_agg(COALESCE(tpg.classification,'UNCLASSIFIED'), tpg.total_per_grade) AS total_per_grade
+                FROM oven_group og
+                LEFT JOIN total_per_grade_cte tpg
+                    ON og.warehouse = tpg.warehouse
+                    AND og.classification = tpg.classification
+                GROUP BY og.warehouse
+            )
+            SELECT json_object_agg(
+                warehouse,
+                json_build_object(
+                    'ovens', ovens,
+                    'total_per_grade', total_per_grade
+                )
+            )
+            FROM warehouse_group;
+        """
+        self.env.cr.execute(query, params)
+        row = self.env.cr.fetchone()
+
+        return row[0] if row and row[0] else {}
+
+    def generate_xlsx_report(self, workbook, data, wizard):
+        report_date = data.get('date')
+        warehouse_id = data.get('warehouse_id')
+
+        # === NORMALISASI WAREHOUSE ===
+        warehouse = None
+        if warehouse_id:
+            if isinstance(warehouse_id, int):
+                warehouse = self.env['stock.warehouse'].browse(warehouse_id)
+            elif hasattr(warehouse_id, 'id'):  
+                warehouse = warehouse_id
+            elif isinstance(warehouse_id, str) and 'stock.warehouse' in warehouse_id:
+                
+                match = re.search(r'\((\d+),?\)', warehouse_id)
+                if match:
+                    warehouse = self.env['stock.warehouse'].browse(int(match.group(1)))
+
+        date_today = format_tanggal_indonesia(report_date)
+        data_report = self._get_data_xlsx_report(report_date, warehouse.id if warehouse else None)
+
+        # =========================================================
+        # RENDER SHEET
+        # =========================================================
+        def _render_sheet(sheet, warehouse_name, ovens, total_per_grade=None):
+            # ================= FORMATS =================
+            fmt_header = workbook.add_format({'border': 1, 'bold': True, 'align': 'center', 'valign': 'vcenter'})
+            fmt_label = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter'})
+            fmt_header_packing = workbook.add_format({'border': 1, 'bold': True, 'align': 'left', 'valign': 'vcenter'})
+            fmt_number = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter'})
+            fmt_text_center = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter'})
+            fmt_total = workbook.add_format({'border': 1, 'bold': True, 'align': 'right', 'valign': 'vcenter'})
+            fmt_grade_total = workbook.add_format({'border': 1, 'align': 'right', 'valign': 'vcenter'})
+            fmt_grade = workbook.add_format({'border': 1, 'align': 'left', 'valign': 'vcenter', 'bold': True})
+
+            # ================= OVEN LIST =================
+            oven_list = []
+            has_none_oven = False
+            for o in ovens:
+                oven = o.get("oven")
+                if oven:
+                    if oven not in oven_list:
+                        oven_list.append(oven)
+                else:
+                    has_none_oven = True
+
+            # ================= TITLE =================
+            total_oven = len(oven_list) + (1 if has_none_oven else 0)
+            total_cols = 1 + (total_oven * 2)
+            last_col = total_cols - 1
+            warehouse_end_col = int((total_cols - 1) * 0.7)
+            date_start_col = min(warehouse_end_col + 1, last_col)
+
+            sheet.merge_range(0, 0, 0, warehouse_end_col, warehouse_name, fmt_label)
+            if date_start_col == last_col:
+                sheet.write(0, last_col, f"TANGGAL : {date_today}", fmt_label)
+            else:
+                sheet.merge_range(0, date_start_col, 0, last_col, f"TANGGAL : {date_today}", fmt_label)
+
+            # ================= HEADER ROW 1 =================
+            header_row = 1
+            col = 0
+            sheet.write(header_row, col, "PACKING", fmt_header_packing)
+            col += 1
+            for oven in oven_list:
+                sheet.merge_range(header_row, col, header_row, col + 1, oven, fmt_header)
+                col += 2
+            if has_none_oven:
+                sheet.merge_range(header_row, col, header_row, col + 1, "NONE", fmt_header)
+
+            # ================= MAP DATA =================
+            data_map = {}
+            total_per_oven = {}
+
+            for o in ovens:
+                grade = o.get("classification") or "UNCLASSIFIED"
+                oven_key = o.get("oven") or "NONE"
+
+                data_map.setdefault(grade, {})
+                data_map[grade].setdefault(oven_key, {"qty": 0, "products": set()})
+                total_per_oven.setdefault(oven_key, 0)
+
+                for p in o.get("products", []):
+                    qty = p.get("qty", 0)
+                    data_map[grade][oven_key]["qty"] += qty
+                    data_map[grade][oven_key]["products"].add(p.get("product"))
+                    total_per_oven[oven_key] += qty
+
+            # ================= COMPUTE TOTAL PER GRADE =================
+            if total_per_grade is None:
+                total_per_grade = {}
+                for grade, oven_data in data_map.items():
+                    total_per_grade[grade] = sum(d.get("qty", 0) for d in oven_data.values())
+
+            unclassified_total = sum(
+                p.get("qty", 0)
+                for o in ovens
+                if not o.get("classification")
+                for p in o.get("products", [])
+            )
+            if unclassified_total > 0:
+                total_per_grade["UNCLASSIFIED"] = unclassified_total
+
+            # ================= STATIC PICKING ROWS =================
+            static_rows = ["CAMP.", "BRKT TUNGGU JAM", "SHIFT BRIKEТ/РА",
+                        "BKR(HR/JM)/KROAK", "PEMBAKAR/PENUTUP", "ASUMSI/BERAT PER IKAT"]
+            row = header_row + 1
+            for label in static_rows:
+                sheet.write(row, 0, label, fmt_grade)
+                col = 1
+                for _ in oven_list:
+                    sheet.merge_range(row, col, row, col + 1, "", fmt_number)
+                    col += 2
+                if has_none_oven:
+                    sheet.merge_range(row, col, row, col + 1, "", fmt_number)
+                row += 1
+
+            # ================= WRITE DATA (GRADE) =================
+            grade_start_row = row
+            for grade, oven_data in data_map.items():
+                col = 0
+                sheet.write(row, col, grade, fmt_grade)
+                col += 1
+                for oven in oven_list:
+                    data = oven_data.get(oven)
+                    if data:
+                        sheet.write(row, col, data["qty"], fmt_number)
+                        sheet.write(row, col + 1, ", ".join(sorted(data["products"])), fmt_text_center)
+                    else:
+                        sheet.write(row, col, "-", fmt_number)
+                        sheet.write(row, col + 1, "-", fmt_text_center)
+                    col += 2
+                if has_none_oven:
+                    data = oven_data.get("NONE")
+                    if data:
+                        sheet.write(row, col, data["qty"], fmt_number)
+                        sheet.write(row, col + 1, ", ".join(sorted(data["products"])), fmt_text_center)
+                    else:
+                        sheet.write(row, col, "-", fmt_number)
+                        sheet.write(row, col + 1, "-", fmt_text_center)
+                row += 1
+
+            # ================= TOTAL ROW =================
+            sheet.write(row, 0, "TOTAL QTY (KG)", fmt_header)
+            col = 1
+            for oven in oven_list:
+                total = total_per_oven.get(oven)
+                sheet.merge_range(row, col, row, col + 1, total if total else "-", fmt_total)
+                col += 2
+            if has_none_oven:
+                total = total_per_oven.get("NONE")
+                sheet.merge_range(row, col, row, col + 1, total if total else "-", fmt_total)
+
+            # ================= TOTAL PER GRADE DI KANAN =================
+            grade_col_start = last_col + 1
+            grade_row_header = grade_start_row - 1
+            sheet.write(grade_row_header, grade_col_start, "GRADE", fmt_header)
+            sheet.write(grade_row_header, grade_col_start + 1, "TOTAL", fmt_header)
+
+            grade_row = grade_start_row
+            sorted_grades = sorted(total_per_grade.items(), key=lambda x: (x[0] == "UNCLASSIFIED", x[0]))
+            for grade, total in sorted_grades:
+                sheet.write(grade_row, grade_col_start, grade, fmt_grade)
+                sheet.write(grade_row, grade_col_start + 1, total, fmt_grade_total)
+                grade_row += 1
+
+            # ================= TOTAL SELURUH GRADE & RATA-RATA =================
+            total_all_grades = sum(total for grade, total in sorted_grades)
+            sheet.write(grade_row, grade_col_start, "TTL TONASE", fmt_header)
+            sheet.write(grade_row, grade_col_start + 1, total_all_grades, fmt_total)
+
+            num_ovens = len(oven_list) + (1 if has_none_oven else 0)
+            average_per_oven = total_all_grades / num_ovens if num_ovens else 0
+            sheet.write(grade_row + 1, grade_col_start, "RATA-RATA", fmt_header)
+            sheet.write(grade_row + 1, grade_col_start + 1, average_per_oven, fmt_total)
+
+            # ================= COLUMN WIDTH =================
+            sheet.set_column(0, 0, 25)  # PICKING / GRADE
+            col_idx = 1
+            total_oven = len(oven_list) + (1 if has_none_oven else 0)
+            for _ in range(total_oven):
+                sheet.set_column(col_idx, col_idx, 7)     # QTY
+                sheet.set_column(col_idx + 1, col_idx + 1, 18)  # PRODUK
+                col_idx += 2
+            sheet.set_column(grade_col_start, grade_col_start, 25)   # GRADE
+            sheet.set_column(grade_col_start + 1, grade_col_start + 1, 12)  # TOTAL
+
+        # =========================================================
+        # CASE 1 : SINGLE WAREHOUSE
+        # =========================================================
+        if warehouse:
+            wh_name = warehouse.name
+            ovens = data_report.get(wh_name, {}).get("ovens", [])
+            total_per_grade = data_report.get(wh_name, {}).get("total_per_grade")
+            sheet = workbook.add_worksheet(wh_name[:31])
+            _render_sheet(sheet, wh_name, ovens, total_per_grade=total_per_grade)
+
+        # =========================================================
+        # CASE 2 : ALL WAREHOUSE
+        # =========================================================
+        else:
+            for wh_name, wh_data in data_report.items():
+                ovens = wh_data.get("ovens", [])
+                total_per_grade = wh_data.get("total_per_grade")
+                sheet = workbook.add_worksheet(wh_name[:31])
+                _render_sheet(sheet, wh_name, ovens, total_per_grade=total_per_grade)

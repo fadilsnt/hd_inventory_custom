@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8'?>
+<odoo>
+  <record id="stock_move_line_view_inherit_hd_inventory_custom" model="ir.ui.view">
+    <field name="name">stock.move.line.view.inherit.hd.inventory.custom</field>
+    <field name="model">stock.move.line</field>
+    <field name="inherit_id" ref="stock.view_stock_move_line_operation_tree"/>
+    <field name="arch" type="xml">
+      <xpath expr="//list//field[@name='quantity']" position="after">
+        <field name="oven_number" />
+        <field name="production_date" />
+      </xpath>
+    </field>
+  </record>
+</odoo>
