@@ -79,6 +79,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     ON (sl.id = sw.view_location_id
                     OR sl.parent_path LIKE '%%/' || sw.view_location_id || '/%%')
                 WHERE sp.scheduled_date::date = %(report_date)s
+                AND sp.state IN ('confirmed', 'assigned', 'done')
                 {warehouse_filter}
                 GROUP BY sw.name, sml.oven_number, sml.production_date, sml.product_id
             ),
@@ -351,8 +352,8 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                             product_qty[p["product"]] = product_qty.get(p["product"], 0) + p.get("qty", 0)
 
                 products = sorted(product_qty.keys())
-                qtys = [str(product_qty[p]) for p in products]
-                total_grade = sum(product_qty.values())
+                qtys = [str(int(product_qty[p])) for p in products]
+                total_grade = int(sum(product_qty.values()))
 
                 sheet.write(grade_row, grade_col_start, " | ".join(products), fmt_text_center)
                 sheet.write(grade_row, grade_col_start + 1, " | ".join(qtys), fmt_text_center)
@@ -363,13 +364,11 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
 
             # ================= TOTAL SELURUH GRADE & RATA-RATA =================
             total_all_grades = sum(
-                sum(
-                    p.get("qty", 0)
-                    for o in ovens
-                    if (o.get("classification") or "UNCLASSIFIED") == grade
-                    for p in o.get("products", [])
-                )
+                int(p.get("qty", 0))
                 for grade in data_map.keys()
+                for o in ovens
+                if (o.get("classification") or "UNCLASSIFIED") == grade
+                for p in o.get("products", [])
             )
 
             sheet.write(grade_row, grade_col_start + 2, total_all_grades, fmt_total)
