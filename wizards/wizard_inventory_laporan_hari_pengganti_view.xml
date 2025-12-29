@@ -44,7 +44,7 @@
 
     <!-- Action -->
     <record id="action_inventory_laporan_hari_pengganti" model="ir.actions.act_window">
-        <field name="name">Laporan Inventory Hari Pengganti</field>
+        <field name="name">Laporan Harian</field>
         <field name="res_model">wizard.inventory.laporan.hari.pengganti</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
@@ -52,7 +52,7 @@
 
     <!-- Menu -->
     <menuitem id="menu_inventory_laporan_hari_pengganti"
-              name="Laporan Inventory Hari Pengganti"
+              name="Laporan Harian"
               parent="export_stock_report.menu_print_stock_report"
               sequence="10"
               action="action_inventory_laporan_hari_pengganti"/>

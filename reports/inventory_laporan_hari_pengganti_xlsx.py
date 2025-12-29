@@ -178,7 +178,6 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
             elif hasattr(warehouse_id, 'id'):  
                 warehouse = warehouse_id
             elif isinstance(warehouse_id, str) and 'stock.warehouse' in warehouse_id:
-                
                 match = re.search(r'\((\d+),?\)', warehouse_id)
                 if match:
                     warehouse = self.env['stock.warehouse'].browse(int(match.group(1)))
@@ -216,7 +215,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
             warehouse_end_col = int((total_cols - 1) * 0.7)
             date_start_col = min(warehouse_end_col + 1, last_col)
 
-            sheet.merge_range(0, 0, 0, warehouse_end_col, warehouse_name, fmt_label)
+            sheet.merge_range(0, 0, 0, warehouse_end_col, f"Gudang {warehouse_name}", fmt_label)
             if date_start_col == last_col:
                 sheet.write(0, last_col, f"TANGGAL : {date_today}", fmt_label)
             else:
