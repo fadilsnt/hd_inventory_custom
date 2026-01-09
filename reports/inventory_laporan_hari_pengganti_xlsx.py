@@ -71,7 +71,8 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     sml.oven_number AS oven,
                     sml.production_date AS production_date,
                     sml.product_id,
-                    SUM(sml.quantity) AS qty
+                    SUM(sml.quantity) AS qty,
+                    sml.product_uom_id
                 FROM stock_move_line sml
                 JOIN stock_move sm ON sml.move_id = sm.id
                 JOIN stock_picking sp ON sm.picking_id = sp.id
@@ -82,7 +83,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 WHERE sp.scheduled_date::date = %(report_date)s
                 AND sp.state IN ('confirmed', 'assigned', 'done')
                 {warehouse_filter}
-                GROUP BY sw.name, sml.oven_number, sml.production_date, sml.product_id
+                GROUP BY sw.name, sml.oven_number, sml.production_date, sml.product_id, sml.product_uom_id
             ),
             base_data AS (
                 SELECT
@@ -91,7 +92,8 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     bm.production_date,
                     pt.name->>'en_US' AS product,
                     pc.name AS product_category,
-                    uc.name->>'en_US' AS uom_category,
+                    uu.name->>'en_US' AS uom_category,
+                    -- uc.name->>'en_US' AS uom_category,
                     MAX(CASE WHEN pa.name->>'en_US' = 'Grade' THEN pav.name->>'en_US' END)
                         || ' (' ||
                     MAX(CASE WHEN pa.name->>'en_US' = 'BOX' THEN pav.name->>'en_US' END)
@@ -102,7 +104,8 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 JOIN product_template pt ON pp.product_tmpl_id = pt.id
                 -- Tambahan JOIN untuk category & uom
                 LEFT JOIN product_category pc ON pt.categ_id = pc.id
-                LEFT JOIN uom_category uc ON pt.uom_category_id = uc.id
+                LEFT JOIN uom_uom uu ON uu.id = bm.product_uom_id
+                --LEFT JOIN uom_category uc ON pt.uom_category_id = uc.id
                 LEFT JOIN product_variant_combination pvc ON pvc.product_product_id = pp.id
                 LEFT JOIN product_template_attribute_value ptav ON ptav.id = pvc.product_template_attribute_value_id
                 LEFT JOIN product_attribute pa ON pa.id = ptav.attribute_id
@@ -113,7 +116,8 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     bm.production_date,
                     pt.name->>'en_US',
                     pc.name,
-                    uc.name->>'en_US',
+                    -- uc.name->>'en_US',
+                    uu.name,
                     bm.qty
             ),
             oven_group AS (
@@ -494,7 +498,8 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
             sheet.write(grade_row, grade_col_start + 3, "TTL TONASE", fmt_header)
 
             # rata-rata per oven
-            average_per_oven = total_all_grades / len(oven_list) if oven_list else 0
+            average_per_oven = round(total_all_grades / len(oven_list), 2) if oven_list else 0.00
+
             sheet.write(grade_row + 1, grade_col_start + 2, average_per_oven, fmt_total)
             sheet.write(grade_row + 1, grade_col_start + 3, "RATA-RATA", fmt_header)
 
