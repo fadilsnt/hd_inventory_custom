@@ -5,3 +5,4 @@ class StockMoveLine(models.Model):
 
     oven_number = fields.Char(string="Nomor Oven")
     production_date = fields.Date(string="Tanggal Produksi")
+    

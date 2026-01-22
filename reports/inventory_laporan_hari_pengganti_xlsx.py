@@ -85,6 +85,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 {warehouse_filter}
                 GROUP BY sw.name, sml.oven_number, sml.production_date, sml.product_id, sml.product_uom_id
             ),
+
             base_data AS (
                 SELECT
                     bm.warehouse,
@@ -93,7 +94,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     pt.name->>'en_US' AS product,
                     pc.name AS product_category,
                     uu.name->>'en_US' AS uom_category,
-                    -- uc.name->>'en_US' AS uom_category,
+                    COALESCE(uu.weight_per_uom_category, 0) AS weight_per_uom_category,
                     MAX(CASE WHEN pa.name->>'en_US' = 'Grade' THEN pav.name->>'en_US' END)
                         || ' (' ||
                     MAX(CASE WHEN pa.name->>'en_US' = 'BOX' THEN pav.name->>'en_US' END)
@@ -102,10 +103,8 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 FROM base_move bm
                 JOIN product_product pp ON bm.product_id = pp.id
                 JOIN product_template pt ON pp.product_tmpl_id = pt.id
-                -- Tambahan JOIN untuk category & uom
                 LEFT JOIN product_category pc ON pt.categ_id = pc.id
                 LEFT JOIN uom_uom uu ON uu.id = bm.product_uom_id
-                --LEFT JOIN uom_category uc ON pt.uom_category_id = uc.id
                 LEFT JOIN product_variant_combination pvc ON pvc.product_product_id = pp.id
                 LEFT JOIN product_template_attribute_value ptav ON ptav.id = pvc.product_template_attribute_value_id
                 LEFT JOIN product_attribute pa ON pa.id = ptav.attribute_id
@@ -116,10 +115,11 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     bm.production_date,
                     pt.name->>'en_US',
                     pc.name,
-                    -- uc.name->>'en_US',
                     uu.name,
+                    uu.weight_per_uom_category,
                     bm.qty
             ),
+
             oven_group AS (
                 SELECT
                     warehouse,
@@ -128,16 +128,41 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     classification,
                     product_category,
                     uom_category,
+                    weight_per_uom_category,
+
                     json_agg(
                         json_build_object(
                             'product', product,
-                            'qty', qty
+                            'qty',
+                            CASE
+                                WHEN product_category IN ('LOKAL','FUEL')
+                                    THEN qty * COALESCE(weight_per_uom_category, 0)
+                                ELSE qty
+                            END
                         ) ORDER BY product
                     ) AS products,
-                    SUM(qty) AS total_per_oven
+
+                    SUM(
+                        CASE
+                            WHEN product_category IN ('LOKAL','FUEL')
+                                THEN qty * COALESCE(weight_per_uom_category, 0)
+                            ELSE qty
+                        END
+                    ) AS total_per_oven,
+
+                    SUM(qty * COALESCE(weight_per_uom_category, 0)) AS total_weight
                 FROM base_data
-                GROUP BY warehouse, oven, production_date, classification, product_category, uom_category
+                GROUP BY
+                    warehouse,
+                    oven,
+                    production_date,
+                    classification,
+                    product_category,
+                    uom_category,
+                    weight_per_uom_category
             ),
+
+
             total_per_grade_cte AS (
                 SELECT
                     warehouse,
@@ -146,6 +171,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 FROM oven_group
                 GROUP BY warehouse, COALESCE(classification,'UNCLASSIFIED')
             ),
+
             warehouse_group AS (
                 SELECT
                     og.warehouse,
@@ -156,18 +182,19 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                             'classification', og.classification,
                             'product_category', og.product_category,
                             'uom_category', og.uom_category,
+                            'weight_per_uom_category', og.weight_per_uom_category,
                             'products', og.products,
-                            'total_per_oven', og.total_per_oven
+                            'total_per_oven', og.total_per_oven,
+                            'total_weight', og.total_weight
                         )
                         ORDER BY og.oven
                     ) AS ovens,
                     json_object_agg(COALESCE(tpg.classification,'UNCLASSIFIED'), tpg.total_per_grade) AS total_per_grade
                 FROM oven_group og
-                LEFT JOIN total_per_grade_cte tpg
-                    ON og.warehouse = tpg.warehouse
-                    AND og.classification = tpg.classification
+                LEFT JOIN total_per_grade_cte tpg ON og.warehouse = tpg.warehouse AND og.classification = tpg.classification
                 GROUP BY og.warehouse
             )
+            
             SELECT json_object_agg(
                 warehouse,
                 json_build_object(
@@ -302,13 +329,16 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     oven_key = "NONE"
 
                 data_map.setdefault(grade, {})
-                data_map[grade].setdefault(oven_key, {"qty": 0, "products": set()})
+                data_map[grade].setdefault(oven_key, {"products": {}})
                 total_per_oven.setdefault(oven_key, 0)
 
                 for p in o.get("products", []):
+                    product = p.get("product")
                     qty = p.get("qty", 0)
-                    data_map[grade][oven_key]["qty"] += qty
-                    data_map[grade][oven_key]["products"].add(p.get("product"))
+
+                    data_map[grade][oven_key]["products"].setdefault(product, 0)
+                    data_map[grade][oven_key]["products"][product] += qty
+
                     total_per_oven[oven_key] += qty
 
             # ================= COMPUTE TOTAL PER GRADE =================
@@ -361,8 +391,13 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 for oven in oven_list:
                     data = oven_data.get(oven)
                     if data:
-                        sheet.write(row, col, data["qty"], fmt_number)
-                        sheet.write(row, col + 1, ", ".join(sorted(data["products"])), fmt_text_center)
+                        products = sorted(data["products"].items())
+
+                        qty_str = " | ".join(str(int(qty)) for _, qty in products)
+                        prod_str = " | ".join(name for name, _ in products)
+
+                        sheet.write(row, col, qty_str, fmt_number)
+                        sheet.write(row, col + 1, prod_str, fmt_text_center)
                     else:
                         sheet.write(row, col, "-", fmt_number)
                         sheet.write(row, col + 1, "-", fmt_text_center)
@@ -374,7 +409,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
             if aggregated_special:
                 # Buat mapping: produk -> oven -> {qty, uom}
                 product_per_oven = {}
-                for o in ovens:
+                for o in ovens: 
                     if o.get("product_category") in ["LOKAL", "FUEL"]:
                         oven_key = _get_oven_key(o.get("oven"), o.get("production_date")) or "NONE"
                         for p in o.get("products", []):
@@ -476,7 +511,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     sheet.write(grade_row, grade_col_start, p_name, fmt_text_center)
                     sheet.write(grade_row, grade_col_start + 1, qty, fmt_number)
                     sheet.write(grade_row, grade_col_start + 2, qty, fmt_grade_total)  # total sama dengan qty
-                    sheet.write(grade_row, grade_col_start + 3, f"{uom} ({category})", fmt_grade)
+                    sheet.write(grade_row, grade_col_start + 3, category, fmt_grade)
 
                     grade_row += 1
 
