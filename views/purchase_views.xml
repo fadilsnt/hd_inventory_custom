@@ -12,6 +12,11 @@
             <xpath expr="//sheet//group[1]/group[1]" position="inside">
                 <field name="btb_number" readonly="1" invisible="not btb_number"/>
             </xpath>
+
+            <xpath expr="//label[@for='receipt_reminder_email']" position="before">
+                <field name="vendor_invoice_date"/>
+            </xpath>
+
         </field>
     </record>
 </odoo>

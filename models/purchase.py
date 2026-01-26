@@ -10,7 +10,7 @@ class PurchaseOrder(models.Model):
     _inherit = 'purchase.order'
 
     btb_number = fields.Char(string="No. BTB", readonly=True, copy=False)
-
+    vendor_invoice_date = fields.Date(string="Tanggal Invoice Vendor")
 
     def action_print_btb(self):
         self.ensure_one()
