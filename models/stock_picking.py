@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, api, fields, _
+from dateutil.relativedelta import relativedelta
+from datetime import timedelta
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
@@ -12,6 +14,55 @@ class StockPicking(models.Model):
         string="Owners",
         help="Owner yang terlibat pada stock move."
     )
+
+    btb_number = fields.Char(string="No. BTB", readonly=True, copy=False)
+
+    def _get_bulan_romawi(self, bulan):
+        romawi = {
+            1: 'I', 2: 'II', 3: 'III', 4: 'IV',
+            5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII',
+            9: 'IX', 10: 'X', 11: 'XI', 12: 'XII'
+        }
+        return romawi.get(bulan, '')
+
+    def button_validate(self):
+        res = super().button_validate()
+
+        for picking in self.filtered(lambda p: p.picking_type_code == 'incoming'):
+            if not picking.btb_number:
+                date_done = picking.date_done or fields.Datetime.now()
+
+                # === FIX DI SINI ===
+                date_done_dt = fields.Datetime.context_timestamp(picking, date_done)
+
+                tahun = date_done_dt.strftime('%y')
+                bulan_romawi = self._get_bulan_romawi(date_done_dt.month)
+
+                # domain tetap sama
+                domain = [
+                    ('picking_type_code', '=', 'incoming'),
+                    ('btb_number', '!=', False),
+                    ('date_done', '>=', date_done_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)),
+                    ('date_done', '<=', date_done_dt.replace(day=1, hour=23, minute=59, second=59, microsecond=999999) + relativedelta(months=1) - timedelta(microseconds=1))
+                ]
+                last = self.env['stock.picking'].search(domain, order='btb_number desc', limit=1)
+
+                if last:
+                    last_urutan = int(last.btb_number.split('/')[1])
+                    urutan = last_urutan + 1
+                else:
+                    urutan = 1
+
+                btb = 'BTB/%02d/%s/%s' % (urutan, bulan_romawi, tahun)
+                picking.btb_number = btb
+
+                # update PO
+                po_ids = picking.move_ids.mapped('purchase_line_id.order_id')
+                if po_ids:
+                    po_ids.write({'btb_number': btb})
+
+        return res
+
 
     @api.model
     def create(self, vals):

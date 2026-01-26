@@ -1,5 +1,5 @@
 import logging
-from odoo import models
+from odoo import models, fields, api, _
 import io
 import xlsxwriter
 from datetime import datetime, timedelta
@@ -8,6 +8,13 @@ _logger = logging.getLogger(__name__)
 
 class PurchaseOrder(models.Model):
     _inherit = 'purchase.order'
+
+    btb_number = fields.Char(string="No. BTB", readonly=True, copy=False)
+
+
+    def action_print_btb(self):
+        self.ensure_one()
+        return self.env.ref('hd_inventory_custom.action_report_bukti_terima_barang').report_action(self)    
 
     def print_xlsx_report(self, start_date=None, end_date=None):
         output = io.BytesIO()

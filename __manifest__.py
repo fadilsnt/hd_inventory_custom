@@ -20,7 +20,10 @@
         'views/stock_picking_views.xml',
         'views/stock_move_line_inherit_view.xml',
         'views/uom_uom_views.xml',
+        'views/purchase_views.xml',
+        'reports/paperformat.xml',
         'reports/report_action.xml',
+        'reports/bukti_terima_barang_pdf_report.xml',
     ],
     'assets': {
         'web.assets_backend': [

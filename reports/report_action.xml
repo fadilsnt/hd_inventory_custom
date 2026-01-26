@@ -7,4 +7,16 @@
         <field name="report_name">hd_inventory_custom.hari_pengganti_xlsx</field>
         <field name="report_file">Laporan_Inventory_Hari_Pengganti</field>
     </record>
+
+    <record id="action_report_bukti_terima_barang" model="ir.actions.report">
+        <field name="name">Bukti Terima Barang</field>
+        <field name="model">purchase.order</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">hd_inventory_custom.bukti_terima_barang_pdf_report</field>
+        <field name="report_file">hd_inventory_custom.bukti_terima_barang_pdf_report</field>
+        <field name="print_report_name">'Bukti Terima Barang %s - %s' % (object.btb_number.replace('/', '-'), object.name)</field>
+        <field name="paperformat_id" ref="hd_inventory_custom.paperformat_bukti_terima_barang"/>
+        <field name="binding_model_id" ref="purchase.model_purchase_order"/>
+        <field name="binding_type">report</field>
+    </record>    
 </odoo>

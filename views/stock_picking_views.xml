@@ -12,6 +12,9 @@
             <xpath expr="//field[@name='owner_id']" position="after">
                 <field name="pemilik_ids" widget="many2many_tags" readonly="1"/>
             </xpath>
+            <xpath expr="//field[@name='origin']" position="after">
+                <field name="btb_number" invisible="not btb_number"/>
+            </xpath>
         </field>
     </record>   
 
