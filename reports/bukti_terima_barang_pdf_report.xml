@@ -68,10 +68,11 @@
 
             <table class="detail-product-line w-100">
                 <tr>
-                    <th class="p-1" style="width: 4%;">No</th>
-                    <th class="p-1" style="width: 60%;">Nama Barang</th>
-                    <th class="p-1" style="width: 18%;">Qty</th>
-                    <th class="p-1" style="width: 18%;">Satuan</th>
+                    <th class="p-1" style="font-weight: bold; width: 4%;">No</th>
+                    <th class="p-1" style="font-weight: bold; width: 30%;">Nama Barang</th>
+                    <th class="p-1" style="font-weight: bold; width: 30%;">Keterangan</th>
+                    <th class="p-1" style="font-weight: bold; width: 18%;">Qty</th>
+                    <th class="p-1" style="font-weight: bold; width: 18%;">Satuan</th>
                 </tr>
 
                 <t t-set="max_line" t-value="9"/>
@@ -82,11 +83,13 @@
                         <t t-if="i &lt; len(lines)">
                             <td class="p-1 text-center"><t t-esc="i+1"/></td>
                             <td class="p-1 text-left"><t t-esc="lines[i].product_id.name"/></td>
+                            <td class="p-1 text-left"><t t-esc="lines[i].name"/></td>
                             <td class="p-1 text-center"><t t-esc="'{:,.0f}'.format(lines[i].qty_received or 0)"/></td>
                             <td class="p-1 text-center"><t t-esc="lines[i].product_uom.name"/></td>
                         </t>
                         <t t-else="">
                             <td class="p-1"><br /></td>
+                            <td class="p-1"></td>
                             <td class="p-1"></td>
                             <td class="p-1"></td>
                             <td class="p-1"></td>

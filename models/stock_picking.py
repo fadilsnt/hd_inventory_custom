@@ -31,19 +31,17 @@ class StockPicking(models.Model):
         for picking in self.filtered(lambda p: p.picking_type_code == 'incoming'):
             if not picking.btb_number:
                 date_done = picking.date_done or fields.Datetime.now()
-
-                # === FIX DI SINI ===
                 date_done_dt = fields.Datetime.context_timestamp(picking, date_done)
 
                 tahun = date_done_dt.strftime('%y')
                 bulan_romawi = self._get_bulan_romawi(date_done_dt.month)
 
-                # domain tetap sama
                 domain = [
                     ('picking_type_code', '=', 'incoming'),
                     ('btb_number', '!=', False),
                     ('date_done', '>=', date_done_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)),
-                    ('date_done', '<=', date_done_dt.replace(day=1, hour=23, minute=59, second=59, microsecond=999999) + relativedelta(months=1) - timedelta(microseconds=1))
+                    ('date_done', '<=', date_done_dt.replace(day=1, hour=23, minute=59, second=59, microsecond=999999)
+                                + relativedelta(months=1) - timedelta(microseconds=1))
                 ]
                 last = self.env['stock.picking'].search(domain, order='btb_number desc', limit=1)
 
@@ -53,7 +51,17 @@ class StockPicking(models.Model):
                 else:
                     urutan = 1
 
-                btb = 'BTB/%02d/%s/%s' % (urutan, bulan_romawi, tahun)
+                # === AMBIL KODE GUDANG ===
+                warehouse = picking.picking_type_id.warehouse_id
+                warehouse_code = warehouse.code if warehouse else 'NA'
+
+                # === FORMAT BTB BARU ===
+                btb = 'BTB/%02d/%s/%s/%s' % (
+                    urutan,
+                    bulan_romawi,
+                    tahun,
+                    warehouse_code
+                )
                 picking.btb_number = btb
 
                 # update PO
@@ -62,6 +70,7 @@ class StockPicking(models.Model):
                     po_ids.write({'btb_number': btb})
 
         return res
+
 
 
     @api.model

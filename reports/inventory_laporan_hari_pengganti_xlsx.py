@@ -56,6 +56,19 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
     _description = 'Laporan Inventory Hari Pengganti XLSX'
     _auto = False 
 
+    # def _get_data_report(self, report_date, warehouse_id=None):
+    #     domain = [
+    #             ('picking_id.scheduled_date', '=', report_date),
+    #             ('picking_id.state', 'in', ['confirmed', 'assigned', 'done'])
+    #         ]
+        
+    #     if warehouse_id:
+    #         domain += [('location_dest_id', 'child_of', self.env['stock.warehouse'].browse(warehouse_id).view_location_id.id)]
+
+    #     move_lines = self.env['stock.move.line'].search(domain)
+
+
+
     def _get_data_xlsx_report(self, report_date, warehouse_id=None):
         warehouse_filter = ""
         params = {'report_date': report_date}
@@ -549,7 +562,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 _logger.info("aggregated_special: %s", aggregated_special)
                 for p_name, p_data in sorted(aggregated_special.items()):
                     qty = p_data.get("qty", 0)
-                    category = p_data.get("category", "-")  # bisa juga pakai p_data.get("category", "-") jika ada
+                    category = p_data.get("category", "-") 
                     uom = p_data.get("uom", "-")
 
                     sheet.write(grade_row, grade_col_start, p_name, fmt_text_center)

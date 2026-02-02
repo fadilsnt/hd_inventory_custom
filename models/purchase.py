@@ -1,6 +1,7 @@
 import logging
 from odoo import models, fields, api, _
 import io
+from collections import defaultdict
 import xlsxwriter
 from datetime import datetime, timedelta
 
@@ -19,115 +20,259 @@ class PurchaseOrder(models.Model):
     def print_xlsx_report(self, start_date=None, end_date=None):
         output = io.BytesIO()
         workbook = xlsxwriter.Workbook(output)
-        sheet = workbook.add_worksheet("REKAP PEMBELIAN")
 
         # ================= FORMAT =================
-        title_fmt = workbook.add_format({
-            'bold': True, 'font_size': 14, 'align': 'center'
-        })
-        header_fmt = workbook.add_format({
-            'bold': True, 'border': 1, 'align': 'center', 'valign': 'vcenter'
-        })
-        cell_fmt = workbook.add_format({
-            'border': 1, 'valign': 'top'
-        })
-        right_fmt = workbook.add_format({
-            'border': 1, 'align': 'right'
-        })
+        title_fmt = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center'})
+        header_fmt = workbook.add_format({'bold': True, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 10})
+        cell_fmt = workbook.add_format({'border': 1, 'valign': 'top'})
+        right_fmt = workbook.add_format({'border': 1, 'align': 'right'})
         bold_fmt = workbook.add_format({'bold': True})
+        border_right_fmt = workbook.add_format({'border': 0, 'right': 1})
+        border_left_fmt = workbook.add_format({'border': 0, 'left': 1})
+        border_top_fmt = workbook.add_format({'border': 0, 'top': 1})
+        border_bottom_fmt = workbook.add_format({'border': 0, 'bottom': 1})
+        border_right_top = workbook.add_format({'border': 0, 'top': 1, 'right': 1})
+        border_left_top = workbook.add_format({'border': 0, 'top': 1, 'left': 1})
+        border_right_bottom = workbook.add_format({'border': 0, 'bottom': 1, 'right': 1})
+        border_left_bottom = workbook.add_format({'border': 0, 'bottom': 1, 'left': 1})          
 
-        # ================= COLUMN WIDTH =================
-        sheet.set_column('A:A', 5)    # NO
-        sheet.set_column('B:B', 12)   # NO. BTB
-        sheet.set_column('C:C', 35)   # KETERANGAN BARANG
-        sheet.set_column('D:D', 8)    # QTY
-        sheet.set_column('E:E', 15)   # HARGA
-        sheet.set_column('F:F', 15)   # TOTAL
-        sheet.set_column('G:G', 18)   # GRAND TOTAL
+        # ===== SIGNATURE STYLES =====
+        sign_title_fmt = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+        })
 
-        # ================= HEADER =================
-        sheet.merge_range('A2:G2', 'REKAP PEMBELIAN', title_fmt)
+        sign_space_fmt = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+        })
 
-        sheet.merge_range('A5:B5', 'SUPPLIER', bold_fmt)
-        sheet.merge_range('A6:B6', 'PERIODE', bold_fmt)
-        sheet.merge_range('D5:E5', 'LOKASI PABRIK', bold_fmt)
+        sign_name_fmt = workbook.add_format({
+            'align': 'center',
+            'valign': 'top',
+            'font_size': 9,
+            'bottom': 1,
+        })
 
-        sheet.write('C5', '-')  # diisi via filter kalau perlu
-        sheet.write('C6', f"{start_date or '-'} s/d {end_date or '-'}")
-        sheet.merge_range('F5:G5', '-')  # diisi via filter kalau perlu
 
-        # ================= TABLE HEADER =================
-        row = 7
-        headers = [
-            "NO", "NO. BTB", "KETERANGAN BARANG",
-            "QTY", "HARGA", "TOTAL", "GRAND TOTAL"
-        ]
-        for col, h in enumerate(headers):
-            sheet.write(row, col, h, header_fmt)
-
-        # ================= TABLE DATA (FULL QUERY) =================
+        # ================= AMBIL DATA =================
         data_lines = self._get_rekap_pembelian_data(start_date, end_date)
+        tgl_awal = self.format_tanggal_id(start_date)
+        tgl_akhir = self.format_tanggal_id(end_date)        
 
-        row += 1
-        no = 1
-
+        # ================= GROUP PER SUPPLIER =================
+        suppliers_data = defaultdict(list)
         for line in data_lines:
-            sheet.write(row, 0, no, cell_fmt)
-            sheet.write(row, 1, line['no_btb'] or '', cell_fmt)
-            sheet.write(row, 2, line['keterangan_barang'] or '', cell_fmt)
-            sheet.write(row, 3, line['qty'] or 0, right_fmt)
-            sheet.write(row, 4, line['harga'] or 0, right_fmt)
-            sheet.write(row, 5, line['total'] or 0, right_fmt)
-            sheet.write(row, 6, line['grand_total'] or 0, right_fmt)
+            supplier_name = line['supplier_name'] or 'UNKNOWN'
+            suppliers_data[supplier_name].append(line)
 
+        # ================= LOOP PER SUPPLIER =================
+        for supplier_name, lines in suppliers_data.items():
+            # Sheet name max 31 char, replace invalid chars
+            sheet_name = supplier_name[:31].replace('/', '_').replace('\\', '_')
+            sheet = workbook.add_worksheet(sheet_name)
+            sheet.set_paper(9)  
+            sheet.set_margins(top=0.5, bottom=0.5, left=0.25, right=0.25)
+            sheet.fit_to_pages(1, 0)              
+            sheet.hide_gridlines(2)
+
+            # Column widths
+            # ================== SET COLUMN WIDTH ==================
+            sheet.set_column('A:A', 1)  
+            sheet.set_column('B:B', 3)  
+            sheet.set_column('C:C', 10)
+            sheet.set_column('D:D', 9)
+            sheet.set_column('E:E', 3)
+            sheet.set_column('F:F', 25)
+            sheet.set_column('G:G', 6)
+            sheet.set_column('H:H', 14)
+            sheet.set_column('I:I', 5)
+            sheet.set_column('J:J', 9)
+            sheet.set_column('K:K', 16)
+            sheet.set_column('L:L', 1)  
+
+            # ================== GUDANG ==================
+            gudang_list = sorted(set(line.get('gudang_name') for line in lines if line.get('gudang_name')))
+            gudang_name = ", ".join(gudang_list) if gudang_list else "-"
+
+            # ================== BORDER KIRI ==================
+            # Kolom A = index 0 (0-based)
+            for row in range(0, 6):  # baris 1–6 (header info)
+                sheet.write(row, 0, '', border_left_fmt)
+            sheet.write('A1', '', border_left_top)  # atas kiri
+
+            # ================== HEADER & MERGE ==================
+            sheet.merge_range('B1:K1', '', border_top_fmt)
+            sheet.merge_range('B2:K2', f'REKAP PEMBELIAN - {supplier_name}', title_fmt)
+
+            sheet.merge_range('B4:C4', 'SUPPLIER', bold_fmt)
+            sheet.merge_range('D4:F4', supplier_name)
+
+            sheet.merge_range('B5:C5', 'PERIODE', bold_fmt)
+
+
+            sheet.merge_range('D5:F5', f"{tgl_awal} s/d {tgl_akhir}")
+            sheet.merge_range('H4:I4', 'LOKASI PABRIK', bold_fmt)
+            sheet.merge_range('J4:K4', gudang_name)
+
+            # ================== BORDER KANAN ==================
+            # Kolom L = index 11 (0-based)
+            for row in range(0, 6):
+                sheet.write(row, 11, '', border_right_fmt)
+            sheet.write('L1', '', border_right_top)  # atas kanan
+
+            # ================= TABLE HEADER =================
+            row = 5  # row 5 (0-based)
+            # Border kiri & kanan baris header
+            sheet.write(row, 1, '', border_left_fmt)    # B5
+            sheet.write(row, 10, '', border_right_fmt)  # K5
+
+            # Header
+            sheet.write(row, 1, 'NO', header_fmt)                     # B5
+            sheet.merge_range(row, 2, row, 3, 'NO. BTB', header_fmt)  # C5:D5
+            sheet.merge_range(row, 4, row, 5, 'KETERANGAN BARANG', header_fmt)  # E5:F5
+            sheet.write(row, 6, 'QTY', header_fmt)                    # G5
+            sheet.write(row, 7, 'HARGA', header_fmt)                  # H5
+            sheet.merge_range(row, 8, row, 9, 'TOTAL', header_fmt)    # I5:J5
+            sheet.write(row, 10, 'GRAND TOTAL', header_fmt)           # K5
+            sheet.set_row(row, 22)
+
+            # ================= TABLE DATA =================
             row += 1
-            no += 1
+            for no, line in enumerate(lines, start=1):
+                sheet.write(row, 0, '', border_left_fmt)  # B
+                sheet.write(row, 1, no, cell_fmt)  # B
+                sheet.merge_range(row, 2, row, 3, line.get('btb_number', ''), cell_fmt)
+                sheet.merge_range(row, 4, row, 5, line.get('keterangan_barang', ''), cell_fmt)
+                sheet.write(row, 6, line.get('qty', 0), right_fmt)
+                sheet.write(row, 7, line.get('harga', 0), right_fmt)
+                sheet.merge_range(row, 8, row, 9, line.get('total', 0), right_fmt)
+                sheet.write(row, 10, line.get('grand_total', 0), right_fmt)
+                sheet.write(row, 11, '', border_right_fmt)
+
+                row += 1
+            sheet.write(row, 0, '', border_left_fmt)    # B5
+            sheet.write(row, 11, '', border_right_fmt)
+            
+
+            # ================= SIGNATURE =================
+            row += 1
+            sheet.write(row, 0, '', border_left_fmt)    # B5
+            sheet.write(row, 11, '', border_right_fmt)
+
+            # Judul tanda tangan
+            sheet.merge_range(row, 1, row, 4, 'DIBAYAR', sign_title_fmt)      # A-E
+            sheet.write(row, 5, 'DIPERIKSA', sign_title_fmt)                 # F
+            sheet.merge_range(row, 6, row, 8, 'DIKETAHUI', sign_title_fmt)   # G-I
+            sheet.merge_range(row, 9, row, 10, 'DIBUAT', sign_title_fmt)     # J-K
+
+            # Tinggi baris judul
+            sheet.set_row(row, 22)
+
+            # Space tanda tangan (4 baris)
+            space_rows = 4
+            for i in range(1, space_rows + 1):
+                r = row + i
+                sheet.write(r, 0, '', border_left_fmt)
+                sheet.merge_range(r, 1, r, 4, '', sign_space_fmt)      # A-E
+                sheet.write(r, 5, '', sign_space_fmt)                  # F
+                sheet.merge_range(r, 6, r, 8, '', sign_space_fmt)      # G-I
+                sheet.merge_range(r, 9, r, 10, '', sign_space_fmt)     # J-K
+                sheet.write(r, 11, '', border_right_fmt)
+                sheet.set_row(r, 15) 
+
+            row = row + space_rows + 1
+            sheet.write(row, 0, '', border_left_fmt)
+            sheet.merge_range(row, 1, row, 4, '(...........................................)', sign_space_fmt)
+            sheet.write(row, 5, '(...........................................)', sign_space_fmt)
+            sheet.merge_range(row, 6, row, 8, '(...........................................)', sign_space_fmt)
+            sheet.merge_range(row, 9, row, 10, '(...........................................)', sign_space_fmt)
+            sheet.write(row, 11, '', border_right_fmt)
+
+            row = row + 1
+            sheet.write(row, 0, '', border_left_bottom)
+            sheet.merge_range(row, 1, row, 4, 'Nama & Tanda Tangan', sign_name_fmt)
+            sheet.write(row, 5, 'Nama & Tanda Tangan', sign_name_fmt)
+            sheet.merge_range(row, 6, row, 8, 'Nama & Tanda Tangan', sign_name_fmt)
+            sheet.merge_range(row, 9, row, 10, 'Nama & Tanda Tangan', sign_name_fmt)
+            sheet.write(row, 11, '', border_right_bottom)
+            sheet.set_row(row, 22)
+
 
         workbook.close()
         output.seek(0)
         return output.read()
 
-
-
     def _get_rekap_pembelian_data(self, start_date=None, end_date=None):
+        from datetime import datetime
+
         # ================= NORMALIZE DATE =================
         if isinstance(start_date, str):
             start_date = datetime.strptime(start_date, "%d/%m/%Y").date()
-
         if isinstance(end_date, str):
             end_date = datetime.strptime(end_date, "%d/%m/%Y").date()
 
         query = """
             SELECT
-                po.name            AS no_btb,
-                rp.name            AS supplier,
-                pol.name           AS keterangan_barang,
-                pol.product_qty    AS qty,
-                pol.price_unit     AS harga,
-                pol.price_subtotal AS total,
-                pol.price_total    AS grand_total
+                po.partner_id       AS supplier_id,
+                rp.name             AS supplier_name,
+                po.name             AS no_po,
+                po.btb_number       AS btb_number,
+                pol.name            AS keterangan_barang,
+                pol.product_qty     AS qty,
+                pol.price_unit      AS harga,
+                pol.price_subtotal  AS total,
+                pol.price_total     AS grand_total,
+                wh.name             AS gudang_name
             FROM purchase_order po
             JOIN purchase_order_line pol ON pol.order_id = po.id
             LEFT JOIN res_partner rp ON rp.id = po.partner_id
-            
+            LEFT JOIN stock_picking_type pt ON pt.id = po.picking_type_id
+            LEFT JOIN stock_warehouse wh ON wh.id = pt.warehouse_id
         """
 
         params = []
 
+        # ================= FILTER DATE =================
+        where_clauses = []
         if start_date:
-            query += "WHERE DATE(po.date_order) >= %s"
+            where_clauses.append("DATE(po.date_order) >= %s")
             params.append(start_date)
-
         if end_date:
-            query += " AND DATE(po.date_order) <= %s"
+            where_clauses.append("DATE(po.date_order) <= %s")
             params.append(end_date)
 
-        query += " ORDER BY po.name, pol.id"
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+
+        # ================= ORDER BY SUPPLIER & PO =================
+        query += " ORDER BY rp.name, po.name, pol.id"
 
         _logger.warning("🧪 FINAL SQL PARAMS (DATE CAST): %s", params)
-
         self.env.cr.execute(query, params)
         rows = self.env.cr.dictfetchall()
-
         _logger.warning("📊 QUERY RESULT COUNT: %s", len(rows))
+
         return rows
+
+    def format_tanggal_id(self, tgl):
+        if not tgl:
+            return '-'
+
+        if isinstance(tgl, str):
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    tgl = datetime.strptime(tgl, fmt)
+                    break
+                except ValueError:
+                    continue
+            else:
+                return '-'  # format tidak dikenali
+
+        bulan_id = [
+            'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        ]
+
+        return f"{tgl.day} {bulan_id[tgl.month - 1]} {tgl.year}"
