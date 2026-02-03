@@ -26,6 +26,13 @@ class PurchaseOrder(models.Model):
         header_fmt = workbook.add_format({'bold': True, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 10})
         cell_fmt = workbook.add_format({'border': 1, 'valign': 'top'})
         right_fmt = workbook.add_format({'border': 1, 'align': 'right'})
+        idr_fmt = workbook.add_format({
+            'num_format': '[$Rp-421] #,##0.00',
+            'align': 'right',
+            'border': 1, 
+            'align': 'right'
+        })
+
         bold_fmt = workbook.add_format({'bold': True})
         border_right_fmt = workbook.add_format({'border': 0, 'right': 1})
         border_left_fmt = workbook.add_format({'border': 0, 'left': 1})
@@ -34,7 +41,8 @@ class PurchaseOrder(models.Model):
         border_right_top = workbook.add_format({'border': 0, 'top': 1, 'right': 1})
         border_left_top = workbook.add_format({'border': 0, 'top': 1, 'left': 1})
         border_right_bottom = workbook.add_format({'border': 0, 'bottom': 1, 'right': 1})
-        border_left_bottom = workbook.add_format({'border': 0, 'bottom': 1, 'left': 1})          
+        border_left_bottom = workbook.add_format({'border': 0, 'bottom': 1, 'left': 1})         
+        border_left_bottom_total = workbook.add_format({'border': 0, 'bottom': 1, 'left': 1, 'bold': True}) 
 
         # ===== SIGNATURE STYLES =====
         sign_title_fmt = workbook.add_format({
@@ -140,6 +148,7 @@ class PurchaseOrder(models.Model):
 
             # ================= TABLE DATA =================
             row += 1
+            start_row_data = row
             for no, line in enumerate(lines, start=1):
                 keterangan = ' '.join(line.get('keterangan_barang', '').splitlines())
 
@@ -148,12 +157,20 @@ class PurchaseOrder(models.Model):
                 sheet.merge_range(row, 2, row, 3, line.get('btb_number', ''), cell_fmt)
                 sheet.merge_range(row, 4, row, 5, keterangan, cell_fmt)
                 sheet.write(row, 6, line.get('qty', 0), right_fmt)
-                sheet.write(row, 7, line.get('harga', 0), right_fmt)
-                sheet.merge_range(row, 8, row, 9, line.get('total', 0), right_fmt)
-                sheet.write(row, 10, line.get('grand_total', 0), right_fmt)
+                sheet.write(row, 7, line.get('harga', 0), idr_fmt)
+                sheet.merge_range(row, 8, row, 9, line.get('total', 0), idr_fmt)
+                sheet.write(row, 10, line.get('grand_total', 0), idr_fmt)
                 sheet.write(row, 11, '', border_right_fmt)
 
                 row += 1
+
+            end_row_data = row - 1
+            sheet.merge_range(row, 1, row, 6, 'TOTAL', border_left_bottom_total)
+
+            sheet.write_formula( row, 7, f'=SUM(H{start_row_data+1}:H{end_row_data+1})', idr_fmt)
+            sheet.merge_range( row, 8, row, 9, f'=SUM(I{start_row_data+1}:I{end_row_data+1})', idr_fmt)
+            sheet.write_formula( row, 10, f'=SUM(K{start_row_data+1}:K{end_row_data+1})', idr_fmt)
+            
             sheet.write(row, 0, '', border_left_fmt)    # B5
             sheet.write(row, 11, '', border_right_fmt)
             
