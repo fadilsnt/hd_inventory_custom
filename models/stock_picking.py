@@ -6,15 +6,7 @@ from datetime import timedelta
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
-    pemilik_ids = fields.Many2many(
-        'res.partner',
-        'stock_picking_owner_rel',
-        'picking_id',
-        'owner_id',
-        string="Owners",
-        help="Owner yang terlibat pada stock move."
-    )
-
+    pemilik_ids = fields.Many2many('res.partner', 'stock_picking_owner_rel', 'picking_id', 'owner_id', string="Owners", help="Owner yang terlibat pada stock move.")
     btb_number = fields.Char(string="No. BTB", readonly=True, copy=False)
 
     def _get_bulan_romawi(self, bulan):
@@ -51,11 +43,9 @@ class StockPicking(models.Model):
                 else:
                     urutan = 1
 
-                # === AMBIL KODE GUDANG ===
                 warehouse = picking.picking_type_id.warehouse_id
                 warehouse_code = warehouse.code if warehouse else 'NA'
 
-                # === FORMAT BTB BARU ===
                 btb = 'BTB/%02d/%s/%s/%s' % (
                     urutan,
                     bulan_romawi,
@@ -70,8 +60,6 @@ class StockPicking(models.Model):
                     po_ids.write({'btb_number': btb})
 
         return res
-
-
 
     @api.model
     def create(self, vals):

@@ -104,7 +104,7 @@ class PurchaseOrder(models.Model):
 
             # ================== HEADER & MERGE ==================
             sheet.merge_range('B1:K1', '', border_top_fmt)
-            sheet.merge_range('B2:K2', f'REKAP PEMBELIAN - {supplier_name}', title_fmt)
+            sheet.merge_range('B2:K2', f'REKAP PEMBELIAN', title_fmt)
 
             sheet.merge_range('B4:C4', 'SUPPLIER', bold_fmt)
             sheet.merge_range('D4:F4', supplier_name)
@@ -141,10 +141,12 @@ class PurchaseOrder(models.Model):
             # ================= TABLE DATA =================
             row += 1
             for no, line in enumerate(lines, start=1):
+                keterangan = ' '.join(line.get('keterangan_barang', '').splitlines())
+
                 sheet.write(row, 0, '', border_left_fmt)  # B
                 sheet.write(row, 1, no, cell_fmt)  # B
                 sheet.merge_range(row, 2, row, 3, line.get('btb_number', ''), cell_fmt)
-                sheet.merge_range(row, 4, row, 5, line.get('keterangan_barang', ''), cell_fmt)
+                sheet.merge_range(row, 4, row, 5, keterangan, cell_fmt)
                 sheet.write(row, 6, line.get('qty', 0), right_fmt)
                 sheet.write(row, 7, line.get('harga', 0), right_fmt)
                 sheet.merge_range(row, 8, row, 9, line.get('total', 0), right_fmt)
@@ -252,7 +254,7 @@ class PurchaseOrder(models.Model):
         _logger.warning("🧪 FINAL SQL PARAMS (DATE CAST): %s", params)
         self.env.cr.execute(query, params)
         rows = self.env.cr.dictfetchall()
-        _logger.warning("📊 QUERY RESULT COUNT: %s", len(rows))
+        _logger.warning("📊 QUERY RESULT: %s", rows)
 
         return rows
 

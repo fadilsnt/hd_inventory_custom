@@ -67,8 +67,6 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
 
     #     move_lines = self.env['stock.move.line'].search(domain)
 
-
-
     def _get_data_xlsx_report(self, report_date, warehouse_id=None):
         warehouse_filter = ""
         params = {'report_date': report_date}
