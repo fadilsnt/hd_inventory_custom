@@ -8,6 +8,11 @@ class StockPicking(models.Model):
 
     pemilik_ids = fields.Many2many('res.partner', 'stock_picking_owner_rel', 'picking_id', 'owner_id', string="Owners", help="Owner yang terlibat pada stock move.")
     btb_number = fields.Char(string="No. BTB", readonly=True, copy=False)
+    partner_ref = fields.Char('Vendor Reference', copy=False,
+        help="Reference of the sales order or bid sent by the vendor. "
+             "It's used to do the matching when you receive the "
+             "products as this reference is usually written on the "
+             "delivery order sent by your vendor.")    
 
     def _get_bulan_romawi(self, bulan):
         romawi = {

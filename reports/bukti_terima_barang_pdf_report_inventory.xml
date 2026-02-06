@@ -1,13 +1,11 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <odoo>
-
-    <!-- ================= HEADER ================= -->
-    <template id="bukti_terima_barang_header">
+    <template id="bukti_terima_barang_header_inventory">
         <div class="header border p-1">
             <div class="row d-flex align-items-center">
                 <div class="col-2">
                     <t t-if="docs.company_id.logo">
-                        <img t-att-src="image_data_uri(docs.company_id.logo)" width="70px"/>
+                        <img t-att-src="image_data_uri(o.company_id.logo)" width="70px"/>
                     </t>                    
                 </div>
                 <div class="col-1 text-center">
@@ -27,8 +25,7 @@
         </div>
     </template>
 
-    <!-- ================= BODY ================= -->
-    <template id="bukti_terima_barang_body">
+    <template id="bukti_terima_barang_body_inventory">
         <div class="page">
             <table class="detail-document w-100 table-borderless border p-1">
                 <tr>
@@ -38,9 +35,7 @@
                     <td style="width:12%;">Jam</td>
                     <td style="width:2%;">:</td>
                     <td style="width:34%;">
-                        <span t-if="o.effective_date">
-                            <t t-esc="context_timestamp(o.effective_date).strftime('%H:%M:%S')"/>
-                        </span>                    
+                        <t t-esc="context_timestamp(o.actual_date).strftime('%H:%M:%S')"/>
                     </td>
                 </tr>
                 <tr>
@@ -60,9 +55,7 @@
                     <td>Tanggal</td>
                     <td>:</td>
                     <td>
-                        <t t-if="o.effective_date">
-                            <span t-esc="context_timestamp(o.effective_date).strftime('%d/%M/%Y')" />
-                        </t>
+                        <span t-esc="context_timestamp(o.actual_date).strftime('%d/%M/%Y')" />
                     </td>
                 </tr>
             </table>
@@ -77,7 +70,7 @@
                 </tr>
 
                 <t t-set="max_line" t-value="9"/>
-                <t t-set="lines" t-value="o.order_line"/>
+                <t t-set="lines" t-value="o.move_ids_without_package"/>
 
                 <t t-foreach="range(max_line)" t-as="i">
                     <tr>
@@ -85,7 +78,7 @@
                             <td class="p-1 text-center"><t t-esc="i+1"/></td>
                             <td class="p-1 text-left"><t t-esc="lines[i].product_id.name"/></td>
                             <td class="p-1 text-left"><t t-esc="lines[i].name"/></td>
-                            <td class="p-1 text-center"><t t-esc="'{:,.0f}'.format(lines[i].qty_received or 0).replace(',', '.')"/></td>
+                            <td class="p-1 text-center"><t t-esc="'{:,.0f}'.format(lines[i].quantity or 0).replace(',', '.')"/></td>
                             <td class="p-1 text-center"><t t-esc="lines[i].product_uom.name"/></td>
                         </t>
                         <t t-else="">
@@ -120,33 +113,16 @@
                 </tr>
             </table>
 
-        </div>
+        </div>        
     </template>
 
-    <!-- ================= FOOTER ================= -->
-    <template id="bukti_terima_barang_footer">
-        <div class="footer">
-            <hr/>
-            <div style="text-align:center;">
-                <span>Halaman </span>
-                <span class="page"/> /
-                <span class="topage"/>
-            </div>
-        </div>
-    </template>
-
-    <!-- ================= MAIN REPORT ================= -->
-    <template id="bukti_terima_barang_pdf_report">
-        <t t-call="web.basic_layout">
-            <!-- HEADER SLOT -->
-            <t t-call="hd_inventory_custom.bukti_terima_barang_header"/>
-
-            <!-- FOOTER SLOT -->
-            <!-- <t t-call="hd_inventory_custom.bukti_terima_barang_footer"/> -->
-
-            <!-- CONTENT -->
+    <template id="bukti_terima_barang_pdf_report_inventory">
+        <t t-call="web.html_container">
             <t t-foreach="docs" t-as="o">
-                <t t-call="hd_inventory_custom.bukti_terima_barang_body"/>
+                <t t-call="web.basic_layout">
+                    <t t-call="hd_inventory_custom.bukti_terima_barang_header_inventory"/>
+                    <t t-call="hd_inventory_custom.bukti_terima_barang_body_inventory"/>
+                </t>
             </t>
         </t>
     </template>

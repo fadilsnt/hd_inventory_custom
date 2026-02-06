@@ -7,11 +7,31 @@ from datetime import datetime, timedelta
 
 _logger = logging.getLogger(__name__)
 
+
 class PurchaseOrder(models.Model):
     _inherit = 'purchase.order'
 
     btb_number = fields.Char(string="No. BTB", readonly=True, copy=False)
     vendor_invoice_date = fields.Date(string="Tanggal Invoice Vendor")
+
+    def _prepare_picking(self):
+        _logger.info('_prepare_picking executed')
+        if not self.group_id:
+            self.group_id = self.group_id.create(self._prepare_group_vals())
+        if not self.partner_id.property_stock_supplier.id:
+            raise UserError(_("You must set a Vendor Location for this partner %s", self.partner_id.name))
+        return {
+            'picking_type_id': self.picking_type_id.id,
+            'partner_id': self.partner_id.id,
+            'user_id': False,
+            'date': self.date_order,
+            'origin': self.name,
+            'location_dest_id': self._get_destination_location(),
+            'location_id': self.partner_id.property_stock_supplier.id,
+            'company_id': self.company_id.id,
+            'state': 'draft',
+            'partner_ref': self.partner_ref
+        }    
 
     def action_print_btb(self):
         self.ensure_one()
@@ -26,13 +46,8 @@ class PurchaseOrder(models.Model):
         header_fmt = workbook.add_format({'bold': True, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 10})
         cell_fmt = workbook.add_format({'border': 1, 'valign': 'top'})
         right_fmt = workbook.add_format({'border': 1, 'align': 'right'})
-        idr_fmt = workbook.add_format({
-            'num_format': '[$Rp-421] #,##0.00',
-            'align': 'right',
-            'border': 1, 
-            'align': 'right'
-        })
-
+        qty_fmt = workbook.add_format({'num_format': '#,##0','align': 'right','border': 1,})
+        idr_fmt = workbook.add_format({ 'num_format': '[$Rp-421] #,##0.00', 'align': 'right', 'border': 1,  'align': 'right'})
         bold_fmt = workbook.add_format({'bold': True})
         border_right_fmt = workbook.add_format({'border': 0, 'right': 1})
         border_left_fmt = workbook.add_format({'border': 0, 'left': 1})
@@ -45,27 +60,13 @@ class PurchaseOrder(models.Model):
         border_left_bottom_total = workbook.add_format({'border': 0, 'bottom': 1, 'left': 1, 'bold': True}) 
 
         # ===== SIGNATURE STYLES =====
-        sign_title_fmt = workbook.add_format({
-            'bold': True,
-            'align': 'center',
-            'valign': 'vcenter',
-        })
-
-        sign_space_fmt = workbook.add_format({
-            'align': 'center',
-            'valign': 'vcenter',
-        })
-
-        sign_name_fmt = workbook.add_format({
-            'align': 'center',
-            'valign': 'top',
-            'font_size': 9,
-            'bottom': 1,
-        })
-
+        sign_title_fmt = workbook.add_format({'bold': True,'align': 'center','valign': 'vcenter',})
+        sign_space_fmt = workbook.add_format({'align': 'center','valign': 'vcenter',})
+        sign_name_fmt = workbook.add_format({'align': 'center','valign': 'top','font_size': 9,'bottom': 1,})
 
         # ================= AMBIL DATA =================
         data_lines = self._get_rekap_pembelian_data(start_date, end_date)
+        _logger.info("Data Lines: %s", data_lines)
         tgl_awal = self.format_tanggal_id(start_date)
         tgl_akhir = self.format_tanggal_id(end_date)        
 
@@ -96,9 +97,10 @@ class PurchaseOrder(models.Model):
             sheet.set_column('G:G', 6)
             sheet.set_column('H:H', 14)
             sheet.set_column('I:I', 5)
-            sheet.set_column('J:J', 9)
+            sheet.set_column('J:J', 11)
             sheet.set_column('K:K', 16)
-            sheet.set_column('L:L', 1)  
+            sheet.set_column('L:L', 16)
+            sheet.set_column('M:M', 1)  
 
             # ================== GUDANG ==================
             gudang_list = sorted(set(line.get('gudang_name') for line in lines if line.get('gudang_name')))
@@ -111,8 +113,8 @@ class PurchaseOrder(models.Model):
             sheet.write('A1', '', border_left_top)  # atas kiri
 
             # ================== HEADER & MERGE ==================
-            sheet.merge_range('B1:K1', '', border_top_fmt)
-            sheet.merge_range('B2:K2', f'REKAP PEMBELIAN', title_fmt)
+            sheet.merge_range('B1:L1', '', border_top_fmt)
+            sheet.merge_range('B2:L2', f'REKAP PEMBELIAN', title_fmt)
 
             sheet.merge_range('B4:C4', 'SUPPLIER', bold_fmt)
             sheet.merge_range('D4:F4', supplier_name)
@@ -121,20 +123,20 @@ class PurchaseOrder(models.Model):
 
 
             sheet.merge_range('D5:F5', f"{tgl_awal} s/d {tgl_akhir}")
-            sheet.merge_range('H4:I4', 'LOKASI PABRIK', bold_fmt)
-            sheet.merge_range('J4:K4', gudang_name)
+            sheet.merge_range('I4:J4', 'LOKASI PABRIK', bold_fmt)
+            sheet.merge_range('K4:L4', gudang_name)
 
             # ================== BORDER KANAN ==================
             # Kolom L = index 11 (0-based)
             for row in range(0, 6):
-                sheet.write(row, 11, '', border_right_fmt)
-            sheet.write('L1', '', border_right_top)  # atas kanan
+                sheet.write(row, 12, '', border_right_fmt)
+            sheet.write('M1', '', border_right_top)  # atas kanan
 
             # ================= TABLE HEADER =================
             row = 5  # row 5 (0-based)
             # Border kiri & kanan baris header
             sheet.write(row, 1, '', border_left_fmt)    # B5
-            sheet.write(row, 10, '', border_right_fmt)  # K5
+            sheet.write(row, 12, '', border_right_fmt)  # K5
 
             # Header
             sheet.write(row, 1, 'NO', header_fmt)                     # B5
@@ -143,7 +145,8 @@ class PurchaseOrder(models.Model):
             sheet.write(row, 6, 'QTY', header_fmt)                    # G5
             sheet.write(row, 7, 'HARGA', header_fmt)                  # H5
             sheet.merge_range(row, 8, row, 9, 'TOTAL', header_fmt)    # I5:J5
-            sheet.write(row, 10, 'GRAND TOTAL', header_fmt)           # K5
+            sheet.write(row, 10, 'PAJAK', header_fmt)           # K5
+            sheet.write(row, 11, 'GRAND TOTAL', header_fmt)           # K5
             sheet.set_row(row, 22)
 
             # ================= TABLE DATA =================
@@ -156,29 +159,30 @@ class PurchaseOrder(models.Model):
                 sheet.write(row, 1, no, cell_fmt)  # B
                 sheet.merge_range(row, 2, row, 3, line.get('btb_number', ''), cell_fmt)
                 sheet.merge_range(row, 4, row, 5, keterangan, cell_fmt)
-                sheet.write(row, 6, line.get('qty', 0), right_fmt)
+                sheet.write(row, 6, line.get('qty', 0), qty_fmt)
                 sheet.write(row, 7, line.get('harga', 0), idr_fmt)
                 sheet.merge_range(row, 8, row, 9, line.get('total', 0), idr_fmt)
-                sheet.write(row, 10, line.get('grand_total', 0), idr_fmt)
-                sheet.write(row, 11, '', border_right_fmt)
+                sheet.write(row, 10, line.get('tax_amount', 0), idr_fmt)
+                sheet.write(row, 11, line.get('grand_total', 0), idr_fmt)
+                sheet.write(row, 12, '', border_right_fmt)
 
                 row += 1
 
             end_row_data = row - 1
-            sheet.merge_range(row, 1, row, 6, 'TOTAL', border_left_bottom_total)
+            sheet.merge_range(row, 1, row, 7, 'TOTAL', border_left_bottom_total)
 
-            sheet.write_formula( row, 7, f'=SUM(H{start_row_data+1}:H{end_row_data+1})', idr_fmt)
             sheet.merge_range( row, 8, row, 9, f'=SUM(I{start_row_data+1}:I{end_row_data+1})', idr_fmt)
             sheet.write_formula( row, 10, f'=SUM(K{start_row_data+1}:K{end_row_data+1})', idr_fmt)
+            sheet.write_formula( row, 11, f'=SUM(L{start_row_data+1}:L{end_row_data+1})', idr_fmt)
             
             sheet.write(row, 0, '', border_left_fmt)    # B5
-            sheet.write(row, 11, '', border_right_fmt)
+            sheet.write(row, 12, '', border_right_fmt)
             
 
             # ================= SIGNATURE =================
             row += 1
             sheet.write(row, 0, '', border_left_fmt)    # B5
-            sheet.write(row, 11, '', border_right_fmt)
+            sheet.write(row, 12, '', border_right_fmt)
 
             # Judul tanda tangan
             sheet.merge_range(row, 1, row, 4, 'DIBAYAR', sign_title_fmt)      # A-E
@@ -198,7 +202,7 @@ class PurchaseOrder(models.Model):
                 sheet.write(r, 5, '', sign_space_fmt)                  # F
                 sheet.merge_range(r, 6, r, 8, '', sign_space_fmt)      # G-I
                 sheet.merge_range(r, 9, r, 10, '', sign_space_fmt)     # J-K
-                sheet.write(r, 11, '', border_right_fmt)
+                sheet.write(r, 12, '', border_right_fmt)
                 sheet.set_row(r, 15) 
 
             row = row + space_rows + 1
@@ -207,7 +211,7 @@ class PurchaseOrder(models.Model):
             sheet.write(row, 5, '(...........................................)', sign_space_fmt)
             sheet.merge_range(row, 6, row, 8, '(...........................................)', sign_space_fmt)
             sheet.merge_range(row, 9, row, 10, '(...........................................)', sign_space_fmt)
-            sheet.write(row, 11, '', border_right_fmt)
+            sheet.write(row, 12, '', border_right_fmt)
 
             row = row + 1
             sheet.write(row, 0, '', border_left_bottom)
@@ -215,7 +219,8 @@ class PurchaseOrder(models.Model):
             sheet.write(row, 5, 'Nama & Tanda Tangan', sign_name_fmt)
             sheet.merge_range(row, 6, row, 8, 'Nama & Tanda Tangan', sign_name_fmt)
             sheet.merge_range(row, 9, row, 10, 'Nama & Tanda Tangan', sign_name_fmt)
-            sheet.write(row, 11, '', border_right_bottom)
+            sheet.write(row, 11, '', border_bottom_fmt)
+            sheet.write(row, 12, '', border_right_bottom)
             sheet.set_row(row, 22)
 
 
@@ -243,6 +248,7 @@ class PurchaseOrder(models.Model):
                 pol.price_unit      AS harga,
                 pol.price_subtotal  AS total,
                 pol.price_total     AS grand_total,
+                pol.price_tax       AS tax_amount,
                 wh.name             AS gudang_name
             FROM purchase_order po
             JOIN purchase_order_line pol ON pol.order_id = po.id

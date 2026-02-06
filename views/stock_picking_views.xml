@@ -13,7 +13,8 @@
                 <field name="pemilik_ids" widget="many2many_tags" readonly="1"/>
             </xpath>
             <xpath expr="//field[@name='origin']" position="after">
-                <field name="btb_number" invisible="not btb_number"/>
+                <field name="btb_number" invisible="not btb_number" readonly="1"/>
+                <field name="partner_ref" readonly="1" invisible="not partner_ref"/>
             </xpath>
         </field>
     </record>   

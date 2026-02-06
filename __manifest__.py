@@ -12,7 +12,7 @@
     'support': "echovoid14@gmail.com",
     'category': 'Inventory',
     'version': '0.1',
-    'depends': ['base', 'web', 'product', 'stock', 'fjr_custom_stock', 'export_stock_report', 'report_xlsx', 'uom', 'purchase'],
+    'depends': ['base', 'web', 'product', 'stock', 'fjr_custom_stock', 'export_stock_report', 'report_xlsx', 'uom', 'purchase', 'purchase_stock'],
     'data': [
         'security/ir.model.access.csv',
         'wizards/wizard_inventory_laporan_hari_pengganti_view.xml',
@@ -25,6 +25,7 @@
         'reports/paperformat.xml',
         'reports/report_action.xml',
         'reports/bukti_terima_barang_pdf_report.xml',
+        'reports/bukti_terima_barang_pdf_report_inventory.xml',
     ],
     'assets': {
         'web.assets_backend': [
