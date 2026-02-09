@@ -35,7 +35,7 @@
                     <td style="width:12%;">Jam</td>
                     <td style="width:2%;">:</td>
                     <td style="width:34%;">
-                        <t t-esc="context_timestamp(o.actual_date).strftime('%H:%M:%S')"/>
+                        <span t-field="o.actual_date" t-options="{'widget': 'datetime', 'format': 'HH:mm:ss'}"/>
                     </td>
                 </tr>
                 <tr>
@@ -55,7 +55,7 @@
                     <td>Tanggal</td>
                     <td>:</td>
                     <td>
-                        <span t-esc="context_timestamp(o.actual_date).strftime('%d/%M/%Y')" />
+                        <span t-field="o.actual_date" t-options="{'widget': 'datetime', 'format': 'DD/MM/YYYY'}"/>
                     </td>
                 </tr>
             </table>
