@@ -55,7 +55,7 @@
                     <td>Tanggal</td>
                     <td>:</td>
                     <td>
-                        <span t-field="o.actual_date" t-options="{'widget': 'datetime', 'format': 'DD/MM/YYYY'}"/>
+                        <span t-if="o.actual_date" t-esc="o.actual_date.strftime('%d/%m/%Y')"/>
                     </td>
                 </tr>
             </table>
