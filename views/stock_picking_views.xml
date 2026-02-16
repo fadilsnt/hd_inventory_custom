@@ -10,7 +10,7 @@
                 <field name="owner_id" string="Sale Persons" options="{'no_create': True}"/>
             </xpath>
             <xpath expr="//field[@name='owner_id']" position="after">
-                <field name="pemilik_ids" widget="many2many_tags" readonly="1"/>
+                <field name="pemilik_ids" widget="many2many_tags" readonly="1" invisible="1"/>
             </xpath>
             <xpath expr="//field[@name='origin']" position="after">
                 <field name="btb_number" invisible="not btb_number" readonly="1"/>
