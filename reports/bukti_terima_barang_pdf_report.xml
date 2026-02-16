@@ -61,7 +61,7 @@
                     <td>:</td>
                     <td>
                         <t t-if="o.effective_date">
-                            <span t-esc="context_timestamp(o.effective_date).strftime('%d/%M/%Y')" />
+                            <span t-esc="o.effective_date.strftime('%d/%M/%Y')" />
                         </t>
                     </td>
                 </tr>

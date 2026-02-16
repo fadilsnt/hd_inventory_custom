@@ -47,7 +47,7 @@ class PurchaseOrder(models.Model):
         cell_fmt = workbook.add_format({'border': 1, 'valign': 'top'})
         right_fmt = workbook.add_format({'border': 1, 'align': 'right'})
         qty_fmt = workbook.add_format({'num_format': '#,##0','align': 'right','border': 1,})
-        idr_fmt = workbook.add_format({ 'num_format': '[$Rp-421] #,##0.00', 'align': 'right', 'border': 1,  'align': 'right'})
+        idr_fmt = workbook.add_format({'num_format': '[$Rp-421] #,##0.00;([$Rp-421] #,##0.00)', 'align': 'right', 'border': 1,})
         bold_fmt = workbook.add_format({'bold': True})
         border_right_fmt = workbook.add_format({'border': 0, 'right': 1})
         border_left_fmt = workbook.add_format({'border': 0, 'left': 1})
