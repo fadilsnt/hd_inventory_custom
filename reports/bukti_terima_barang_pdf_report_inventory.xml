@@ -35,7 +35,7 @@
                     <td style="width:12%;">Jam</td>
                     <td style="width:2%;">:</td>
                     <td style="width:34%;">
-                        <span t-if="o.scheduled_date" t-esc="o.scheduled_date.strftime('%H:%M:%S')"/>
+                        <span t-if="o.scheduled_date" t-esc="context_timestamp(o.scheduled_date).strftime('%H:%M:%S')"/>
                     </td>
                 </tr>
                 <tr>
