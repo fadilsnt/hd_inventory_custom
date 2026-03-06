@@ -8,3 +8,5 @@ from . import stock_picking
 from . import stock_move_line
 from . import uom_uom
 from . import purchase
+from . import ir_ui_menu
+from . import stock_picking_type

@@ -14,6 +14,7 @@
     'version': '0.1',
     'depends': ['base', 'web', 'product', 'stock', 'fjr_custom_stock', 'export_stock_report', 'report_xlsx', 'uom', 'purchase', 'purchase_stock'],
     'data': [
+        'security/inventory_security.xml',
         'security/ir.model.access.csv',
         'wizards/wizard_inventory_laporan_hari_pengganti_view.xml',
         'views/product_template_views.xml',

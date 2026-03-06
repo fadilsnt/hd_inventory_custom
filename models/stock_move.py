@@ -22,3 +22,10 @@ class StockMove(models.Model):
         for move in self:
             move.product_id.sales_person_ids = move.sales_person_ids
 
+    def _prepare_move_line_vals(self, quantity=None, reserved_quant=None):
+        vals = super()._prepare_move_line_vals(quantity=quantity, reserved_quant=reserved_quant)
+
+        if not vals.get('owner_id') and self.owner_id:
+            vals['owner_id'] = self.owner_id.id
+
+        return vals

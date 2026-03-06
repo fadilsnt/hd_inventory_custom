@@ -110,3 +110,28 @@ class StockPicking(models.Model):
                 })
 
         return res
+
+    def get_view(self, view_id=None, view_type="form", **options):
+        res = super().get_view(view_id=view_id, view_type=view_type, **options)
+
+        if self.env.user.has_group('hd_inventory_custom.group_picking_view_only'):
+
+            # FORM
+            if view_type == "form":
+                view = self.env.ref(
+                    'hd_inventory_custom.view_picking_form_view_only'
+                ).sudo()
+
+                res['view_id'] = view.id
+                res['arch'] = view.arch_db
+
+            # TREE / LIST
+            if view_type in ("list", "tree"):
+                view = self.env.ref(
+                    'hd_inventory_custom.vpicktree_custom_view_only'
+                ).sudo()
+
+                res['view_id'] = view.id
+                res['arch'] = view.arch_db
+
+        return res
