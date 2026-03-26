@@ -3,6 +3,9 @@ from odoo import models, api, fields, _
 from dateutil.relativedelta import relativedelta
 from datetime import timedelta
 import logging
+from odoo.tools.float_utils import float_compare, float_is_zero
+from collections import defaultdict
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -13,23 +16,121 @@ class StockPicking(models.Model):
         ('btb_number_unique', 'unique(btb_number)', 'BTB number must be unique!')
     ]
 
-    pemilik_ids = fields.Many2many(
-        'res.partner',
-        'stock_picking_owner_rel',
-        'picking_id',
-        'owner_id',
-        string="Owners",
-        help="Owner yang terlibat pada stock move."
-    )
-
+    pemilik_ids = fields.Many2many('res.partner', 'stock_picking_owner_rel', 'picking_id', 'owner_id', string="Owners", help="Owner yang terlibat pada stock move.")
     btb_number = fields.Char(string="No. BTB", readonly=True, copy=False)
+    partner_ref = fields.Char('Vendor Reference', copy=False, help="Reference of the sales order or bid sent by the vendor.")
+    consume_move_ids = fields.One2many('stock.move', 'picking_id', string='Consume Moves', domain=[('is_consume', '=', True)])    
+    move_ids_without_package = fields.One2many('stock.move', 'picking_id', string="Stock move", domain=['|', ('package_level_id', '=', False), ('picking_type_entire_packs', '=', False), ('is_consume', '=', False)])    
 
-    partner_ref = fields.Char(
-        'Vendor Reference',
-        copy=False,
-        help="Reference of the sales order or bid sent by the vendor."
-    )
+    def _validate_consume_products(self, picking):
+        errors = []
+        valid_moves = []
 
+        scrap_location = self._get_scrap_location(picking)
+        root_location = picking.location_dest_id
+        grouped_qty = defaultdict(float)
+        product_map = {}
+
+        for line in picking.move_ids_without_package:
+            qty = sum(line.move_line_ids.mapped('quantity'))
+
+            if not qty:
+                continue
+
+            for cp in line.product_id.consume_product_ids:
+                grouped_qty[cp.id] += qty
+
+                if cp.id not in product_map:
+                    product_map[cp.id] = {
+                        'cp': cp,
+                        'parents': set()
+                    }
+
+                product_map[cp.id]['parents'].add(line.product_id.display_name)
+
+        for product_id, total_qty in grouped_qty.items():
+            cp = product_map[product_id]['cp']
+            parents = product_map[product_id]['parents']            
+
+            quants = self.env['stock.quant'].search([
+                ('product_id', '=', product_id),
+                ('location_id', 'child_of', root_location.id),
+            ])
+
+            available_qty = sum(quants.mapped('quantity')) - sum(quants.mapped('reserved_quantity'))
+
+            if float_compare(available_qty, total_qty, precision_rounding=cp.uom_id.rounding) < 0:
+                errors.append(
+                    f"{', '.join(sorted(parents))} → {cp.display_name}\n"
+                    f"Stock: {available_qty} | Need: {total_qty}"
+                )
+            else:
+                valid_moves.append({
+                    'name': f"Consume for {', '.join(parents)}",
+                    'product_id': cp.id,
+                    'product_uom': cp.uom_id.id,
+                    'product_uom_qty': total_qty,
+                    'location_id': root_location.id,
+                    'location_dest_id': scrap_location.id,
+                    'picking_id': picking.id,
+                    'is_consume': True,
+                })
+
+        if errors:
+            raise UserError(
+                "Stock tidak cukup:\n\n" + "\n\n".join(errors)
+            )
+
+        return valid_moves
+
+    def _get_scrap_location(self, picking):
+        scrap_location = self.env['stock.location'].search([
+            ('scrap_location', '=', True),
+            ('company_id', 'in', [picking.company_id.id, False])
+        ], limit=1)
+
+        if not scrap_location:
+            raise UserError("Scrap location tidak ditemukan!")
+
+        return scrap_location
+
+    def button_validate(self):
+        res = super().button_validate()
+        _logger.info("Button Validate Inherit executed!")
+
+        for picking in self:
+
+            if self.env['stock.move'].search([
+                ('picking_id', '=', picking.id),
+                ('is_consume', '=', True)
+            ]):
+                continue
+
+            consumed_moves = self._validate_consume_products(picking)
+
+            if consumed_moves:
+                moves = self.env['stock.move'].create(consumed_moves)
+                moves._action_confirm()
+                moves._action_assign()
+
+                for move in moves:
+                    if not move.move_line_ids:
+                        self.env['stock.move.line'].create({
+                            'move_id': move.id,
+                            'product_id': move.product_id.id,
+                            'product_uom_id': move.product_uom.id,
+                            'quantity': move.product_uom_qty,
+                            'location_id': move.location_id.id,
+                            'location_dest_id': move.location_dest_id.id,
+                        })
+                    else:
+                        for ml in move.move_line_ids:
+                            ml.quantity = move.product_uom_qty
+
+                moves._action_done()
+
+        return res
+    
     def _get_bulan_romawi(self, bulan):
         romawi = {
             1: 'I', 2: 'II', 3: 'III', 4: 'IV',
@@ -81,12 +182,7 @@ class StockPicking(models.Model):
         warehouse = picking.picking_type_id.warehouse_id
         warehouse_code = warehouse.code if warehouse else 'NA'
 
-        btb_number = 'BTB/%02d/%s/%s/%s' % (
-            urutan,
-            bulan_romawi,
-            tahun,
-            warehouse_code
-        )
+        btb_number = 'BTB/%02d/%s/%s/%s' % (urutan, bulan_romawi, tahun, warehouse_code)
 
         picking.sudo().write({'btb_number': btb_number})
 
@@ -115,22 +211,13 @@ class StockPicking(models.Model):
         res = super().get_view(view_id=view_id, view_type=view_type, **options)
 
         if self.env.user.has_group('hd_inventory_custom.group_picking_view_only'):
-
-            # FORM
             if view_type == "form":
-                view = self.env.ref(
-                    'hd_inventory_custom.view_picking_form_view_only'
-                ).sudo()
-
+                view = self.env.ref('hd_inventory_custom.view_picking_form_view_only').sudo()
                 res['view_id'] = view.id
                 res['arch'] = view.arch_db
 
-            # TREE / LIST
             if view_type in ("list", "tree"):
-                view = self.env.ref(
-                    'hd_inventory_custom.vpicktree_custom_view_only'
-                ).sudo()
-
+                view = self.env.ref('hd_inventory_custom.vpicktree_custom_view_only').sudo()
                 res['view_id'] = view.id
                 res['arch'] = view.arch_db
 

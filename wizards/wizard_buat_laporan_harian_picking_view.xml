@@ -1,0 +1,56 @@
+<?xml version='1.0' encoding='utf-8'?>
+<odoo>
+    <!-- FORM VIEW -->
+    <record id="view_wizard_buat_laporan_harian_picking_form" model="ir.ui.view">
+        <field name="name">wizard.buat.laporan.harian.picking.form</field>
+        <field name="model">wizard.buat.laporan.harian.picking</field>
+        <field name="arch" type="xml">
+            <form string="Laporan Harian Picking">
+                <div class="oe_title">
+                    <span class="o_form_label">Operations</span>
+                    <h1 class="d-flex">
+                        <field name="picking_id"/>
+                    </h1>
+                </div>                    
+                <group>
+                    <group>
+                        <field name="oven_number"/>
+                    </group>
+                    <group>
+                        <field name="production_date"/>
+                        <field name="location_dest_id" string="Lokasi Tujuan" readonly="1"/>
+                    </group>
+                </group>
+
+                <notebook>
+                    <page name="line_ids" string="Product Lines">
+                        <field name="product_line_ids">
+                            <list editable="bottom">
+                                <field name="product_id"/>
+                                <field name="qty"/>
+                            </list>
+                        </field>
+                    </page>
+                </notebook>
+
+                <footer>
+                    <button name="action_apply"
+                            string="Apply"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Cancel" special="cancel"/>
+                </footer>
+
+            </form>
+        </field>
+    </record>
+
+
+    <!-- ACTION -->
+    <record id="action_wizard_buat_laporan_harian_picking" model="ir.actions.act_window">
+        <field name="name">Laporan Harian Picking</field>
+        <field name="res_model">wizard.buat.laporan.harian.picking</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>    
+</odoo>

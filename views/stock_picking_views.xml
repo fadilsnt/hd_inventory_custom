@@ -9,9 +9,39 @@
                 <field name="sales_person_ids" string="Pemilik" widget="many2many_tags" options="{'no_create': True}"/>
                 <field name="owner_id" string="Sale Persons" options="{'no_create': True}"/>
             </xpath>
+
+            <xpath expr="//page[@name='operations']" position="inside">
+                <separator string="Consumed Products" invisible="not consume_move_ids"/>
+                <field name="consume_move_ids" readonly="1" invisible="not consume_move_ids">
+                    <list>
+                        <field name="name"/>
+                        <field name="product_id"/>
+                        <field name="product_uom" optional="hide"/>
+                        <field name="product_uom_qty"/>
+                        <field name="location_id" optional="hide"/>
+                        <field name="location_dest_id" optional="hide"/>
+                        <field name="is_consume" optional="hide"/>
+                        <field name="state" optional="hide"/>
+                    </list>
+                </field>
+            </xpath>
+
             <xpath expr="//field[@name='owner_id']" position="after">
                 <field name="pemilik_ids" widget="many2many_tags" readonly="1" invisible="1"/>
             </xpath>
+
+            <xpath expr="//field[@name='backorder_id']" position="before">
+                <button name="%(action_wizard_buat_laporan_harian_picking)d"
+                        string="BUAT LAPORAN HARIAN"
+                        type="action"
+                        context="{
+                            'default_picking_id': id,
+                            'default_location_dest_id': location_dest_id
+                        }"
+                        class="btn-primary" 
+                        invisible="state == 'done'"/>                
+            </xpath>      
+
             <xpath expr="//field[@name='origin']" position="after">
                 <field name="btb_number" invisible="not btb_number" readonly="1"/>
                 <field name="partner_ref" readonly="1" invisible="not partner_ref"/>

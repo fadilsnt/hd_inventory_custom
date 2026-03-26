@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='sales_person_ids']" position="before">
                 <field name="owner_id" string="Sales" options="{'no_create': True}"/>
+                <field name="consume_product_ids" groups="stock.group_stock_manager" widget="many2many_tags"/>
             </xpath>
         </field>
     </record>

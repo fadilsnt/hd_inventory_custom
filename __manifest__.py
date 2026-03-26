@@ -17,6 +17,7 @@
         'security/inventory_security.xml',
         'security/ir.model.access.csv',
         'wizards/wizard_inventory_laporan_hari_pengganti_view.xml',
+        'wizards/wizard_buat_laporan_harian_picking_view.xml',
         'views/product_template_views.xml',
         'views/stock_picking_views.xml',
         'views/stock_move_line_inherit_view.xml',
