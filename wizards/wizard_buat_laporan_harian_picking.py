@@ -10,6 +10,14 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
     product_line_ids = fields.One2many('wizard.buat.laporan.harian.picking.line', 'wizard_id', string="Product Lines")
     location_dest_id = fields.Many2one('stock.location', 'To', domain="[('usage', '!=', 'view')]", check_company=True, required=True, readonly=True)
 
+    line_packing = fields.Char(string="Line")
+    camp_tgl_briket = fields.Char(string="Camp/TGL Briket")
+    briket_tgu = fields.Char(string="Briket TGU (Jam)")
+    shift_briket = fields.Char(string="Shift Briket/PA")
+    bkr = fields.Char(string="BKR (HR/Jam/Kroak)")
+    pembakar_penutup = fields.Char(string="Pembakar / Penutup")
+    asumsi_berat_ikat = fields.Char(string="Asumsi Berat @Ikat")
+                
     def action_apply(self):
         self.ensure_one()
 
@@ -40,6 +48,13 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
                 'owner_id': move.owner_id.id,
                 'oven_number': self.oven_number,
                 'production_date': self.production_date,
+                'line_packing': self.line_packing,
+                'camp_tgl_briket': self.camp_tgl_briket,
+                'briket_tgu': self.briket_tgu,
+                'shift_briket': self.shift_briket,
+                'bkr': self.bkr,
+                'pembakar_penutup': self.pembakar_penutup,
+                'asumsi_berat_ikat': self.asumsi_berat_ikat
             })
             
 class WizardBuatLaporanHarianPickingLine(models.TransientModel):

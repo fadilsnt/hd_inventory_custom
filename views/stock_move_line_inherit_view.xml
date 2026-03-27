@@ -9,6 +9,15 @@
         <field name="oven_number" />
         <field name="production_date" />
       </xpath>
+      <xpath expr="//list" position="inside">
+        <field name="line_packing" optional="hide"/>
+        <field name="camp_tgl_briket" optional="hide"/>
+        <field name="briket_tgu" optional="hide"/>
+        <field name="shift_briket" optional="hide"/>
+        <field name="bkr" optional="hide"/>
+        <field name="pembakar_penutup" optional="hide"/>
+        <field name="asumsi_berat_ikat" optional="hide"/>
+      </xpath>      
     </field>
   </record>
 </odoo>

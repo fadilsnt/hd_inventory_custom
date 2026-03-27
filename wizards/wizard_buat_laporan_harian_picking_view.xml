@@ -6,19 +6,39 @@
         <field name="model">wizard.buat.laporan.harian.picking</field>
         <field name="arch" type="xml">
             <form string="Laporan Harian Picking">
-                <div class="oe_title">
-                    <span class="o_form_label">Operations</span>
-                    <h1 class="d-flex">
-                        <field name="picking_id"/>
-                    </h1>
-                </div>                    
+                <div class="oe_title" style="width: 100%; max-width: 100%; padding-right: 0 !important; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 15px;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="o_form_label text-muted" style="font-size: 13px;">Operations</span>
+                            <h1 style="margin: 0; font-weight: 600;">
+                                <field name="picking_id" readonly="1"/>
+                            </h1>
+                        </div>
+
+                        <!-- Kanan: Location -->
+                        <div class="text-end">
+                            <span class="o_form_label text-muted" style="font-size: 13px;">To</span>
+                            <div style="font-size: 16px; font-weight: 500;">
+                                <field name="location_dest_id" readonly="1" class="fw-bold"/>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>                   
                 <group>
                     <group>
                         <field name="oven_number"/>
+                        <field name="line_packing"/>
+                        <field name="camp_tgl_briket"/>
+                        <field name="briket_tgu"/>
+                        <field name="shift_briket"/>
                     </group>
                     <group>
                         <field name="production_date"/>
-                        <field name="location_dest_id" string="Lokasi Tujuan" readonly="1"/>
+                        <field name="bkr"/>
+                        <field name="pembakar_penutup"/>
+                        <field name="asumsi_berat_ikat"/>
                     </group>
                 </group>
 
