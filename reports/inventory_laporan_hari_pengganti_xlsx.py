@@ -1,20 +1,13 @@
 from odoo import models
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import re
 import json
 import logging
 
 _logger = logging.getLogger(__name__)
 
-# def fmt_qty(val):
-#     if val is None:
-#         return "-"
-#     if float(val).is_integer():
-#         return str(int(val))
-#     return str(val).rstrip("0").rstrip(".")
-
 def fmt_qty(val):
-    s = f"{float(val):.1f}"   # bulatkan ke 1 desimal
+    s = f"{float(val):.1f}" 
     return s.rstrip("0").rstrip(".")
 
 def format_tanggal_indonesia(dt=None):
@@ -249,6 +242,107 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
             _logger.info("Query mengembalikan hasil kosong.")
 
         return row[0] if row and row[0] else {}
+    
+    def _get_repack_data(self, report_date, warehouse_id=None):
+        if isinstance(report_date, str):
+            report_date = datetime.strptime(report_date, "%Y-%m-%d")
+
+        date_from = report_date
+        date_to = report_date + timedelta(days=1)
+
+        params = {
+            'date_from': date_from,
+            'date_to': date_to,
+        }
+
+        _logger.warning("PARAMS: %s", params)
+
+        warehouse_filter = ""
+        if warehouse_id:
+            warehouse_filter = "AND sw.id = %(warehouse_id)s"
+            params['warehouse_id'] = warehouse_id
+
+        query = f"""
+            WITH bongkar AS (
+                SELECT 
+                    pt_a.name->>'en_US' AS product,
+                    uu.name->>'en_US' AS uom,
+                    SUM(srl.qty_a) AS qty
+                FROM stock_repack_line srl
+                LEFT JOIN product_product pp_a ON srl.product_a_id = pp_a.id
+                LEFT JOIN product_template pt_a ON pp_a.product_tmpl_id = pt_a.id
+                LEFT JOIN uom_uom uu ON pt_a.uom_id = uu.id
+
+                LEFT JOIN stock_picking sp ON srl.picking_id = sp.id
+                LEFT JOIN stock_location sl ON sp.location_dest_id = sl.id
+                LEFT JOIN stock_warehouse sw
+                    ON (
+                        sl.id = sw.view_location_id
+                        OR sl.parent_path LIKE '%%/' || sw.view_location_id || '/%%'
+                    )
+
+                WHERE 
+                    sp.scheduled_date >= %(date_from)s
+                    AND sp.scheduled_date < %(date_to)s
+                    {warehouse_filter}
+
+                GROUP BY pt_a.name->>'en_US', uu.name->>'en_US'
+            ),
+
+            menjadi AS (
+                SELECT 
+                    pt_b.name->>'en_US' AS product,
+                    uu.name->>'en_US' AS uom,
+                    SUM(sro.qty_b) AS qty
+                FROM stock_repack_output sro
+                JOIN stock_repack_line srl ON sro.repack_line_id = srl.id
+                LEFT JOIN product_product pp_b ON sro.product_b_id = pp_b.id
+                LEFT JOIN product_template pt_b ON pp_b.product_tmpl_id = pt_b.id
+                LEFT JOIN uom_uom uu ON pt_b.uom_id = uu.id
+
+                LEFT JOIN stock_picking sp ON srl.picking_id = sp.id
+                LEFT JOIN stock_location sl ON sp.location_dest_id = sl.id
+                LEFT JOIN stock_warehouse sw
+                    ON (
+                        sl.id = sw.view_location_id
+                        OR sl.parent_path LIKE '%%/' || sw.view_location_id || '/%%'
+                    )
+
+                WHERE 
+                    sp.scheduled_date >= %(date_from)s
+                    AND sp.scheduled_date < %(date_to)s
+                    {warehouse_filter}
+
+                GROUP BY pt_b.name->>'en_US', uu.name->>'en_US'
+            )
+
+            SELECT
+                'BONGKAR: ' || COALESCE(
+                    (
+                        SELECT string_agg(
+                            b.product || ': ' || TRIM(TRAILING '.0' FROM b.qty::text) || ' ' || COALESCE(b.uom, ''),
+                            ' + '
+                        )
+                        FROM bongkar b
+                    ),
+                    '-'
+                ) AS bongkar,
+
+                'MENJADI: ' || COALESCE(
+                    (
+                        SELECT string_agg(
+                            m.product || ': ' || TRIM(TRAILING '.0' FROM m.qty::text) || ' ' || COALESCE(m.uom, ''),
+                            ' + '
+                        )
+                        FROM menjadi m
+                    ),
+                    '-'
+                ) AS menjadi;
+        """
+
+        self.env.cr.execute(query, params)
+        return self.env.cr.fetchall()
+
 
     def generate_xlsx_report(self, workbook, data, wizard):
         report_date = data.get('date')
@@ -266,8 +360,14 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 if match:
                     warehouse = self.env['stock.warehouse'].browse(int(match.group(1)))
 
+
+
+
         date_today = format_tanggal_indonesia(report_date)
         data_report = self._get_data_xlsx_report(report_date, warehouse.id if warehouse else None)
+        repack_data = self._get_repack_data(report_date, warehouse.id if warehouse else None)
+
+        _logger.info("Repack Data %s", repack_data)
 
         # =========================================================
         # RENDER SHEET
@@ -548,28 +648,28 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
 
                     grade_row += 1
 
-                # ================= LOOP PRODUK LOKAL / FUEL =================
-                if aggregated_special:
-                    for p_name, p_data in sorted(aggregated_special.items()):
-                        category = p_data.get("category", "-")
+            # ================= LOOP PRODUK LOKAL / FUEL =================
+            if aggregated_special:
+                for p_name, p_data in sorted(aggregated_special.items()):
+                    category = p_data.get("category", "-")
 
-                        total_qty = 0.0
-                        for o in ovens:
-                            if o.get("product_category") != category:
-                                continue
+                    total_qty = 0.0
+                    for o in ovens:
+                        if o.get("product_category") != category:
+                            continue
 
-                            for p in o.get("products", []):
-                                if p.get("product") == p_name:
-                                    qty = p.get("qty", 0)
-                                    weight = p.get("weight_per_product_attribute", 1)
-                                    total_qty += qty * weight   # 🔥 FIX UTAMA
+                        for p in o.get("products", []):
+                            if p.get("product") == p_name:
+                                qty = p.get("qty", 0)
+                                weight = p.get("weight_per_product_attribute", 1)
+                                total_qty += qty * weight   # 🔥 FIX UTAMA
 
-                        sheet.write(grade_row, grade_col_start, p_name, fmt_text_center)
-                        sheet.write(grade_row, grade_col_start + 1, fmt_qty(total_qty), fmt_number)
-                        sheet.write(grade_row, grade_col_start + 2, fmt_qty(total_qty), fmt_grade_total)
-                        sheet.write(grade_row, grade_col_start + 3, category, fmt_grade)
+                    sheet.write(grade_row, grade_col_start, p_name, fmt_text_center)
+                    sheet.write(grade_row, grade_col_start + 1, fmt_qty(total_qty), fmt_number)
+                    sheet.write(grade_row, grade_col_start + 2, fmt_qty(total_qty), fmt_grade_total)
+                    sheet.write(grade_row, grade_col_start + 3, category, fmt_grade)
 
-                        grade_row += 1
+                    grade_row += 1
 
 
             # ================= TOTAL SELURUH GRADE & RATA-RATA =================
@@ -611,6 +711,18 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
             sheet.set_column(grade_col_start + 1, grade_col_start + 1, 25)  # QTY (2 | 4 | 6)
             sheet.set_column(grade_col_start + 2, grade_col_start + 2, 10)  # TOTAL
             sheet.set_column(grade_col_start + 3, grade_col_start + 3, 15)  # GRADE
+
+            # ================= FOOTER =================
+            footer_row = grade_row + 3
+            
+            if repack_data:
+                bongkar, menjadi = repack_data[0]
+
+                sheet.merge_range(footer_row, 0, footer_row, last_col, bongkar)
+                footer_row += 1
+
+                sheet.merge_range(footer_row, 0, footer_row, last_col, menjadi)
+                footer_row += 1    
 
         # =========================================================
         # CASE 1 : SINGLE WAREHOUSE

@@ -57,10 +57,23 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
                 'asumsi_berat_ikat': self.asumsi_berat_ikat
             })
             
+from odoo import models, fields, api
+
 class WizardBuatLaporanHarianPickingLine(models.TransientModel):
     _name = 'wizard.buat.laporan.harian.picking.line'
     _description = "Wizard Line"
 
-    wizard_id = fields.Many2one('wizard.buat.laporan.harian.picking', required=True, ondelete='cascade')
+    wizard_id = fields.Many2one('wizard.buat.laporan.harian.picking', required=True, ondelete='cascade'
+    )
     product_id = fields.Many2one('product.product', string="Product")
+    product_uom_category_id = fields.Many2one('uom.category', related='product_id.uom_id.category_id', store=False)
+    product_uom_id = fields.Many2one('uom.uom', string='Unit of Measure', domain="[('category_id', '=', product_uom_category_id)]")
+
     qty = fields.Float(string="Qty")
+
+    @api.onchange('product_id')
+    def _onchange_product_id(self):
+        if self.product_id:
+            self.product_uom_id = self.product_id.uom_id
+        else:
+            self.product_uom_id = False

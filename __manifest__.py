@@ -12,7 +12,7 @@
     'support': "echovoid14@gmail.com",
     'category': 'Inventory',
     'version': '0.1',
-    'depends': ['base', 'web', 'product', 'stock', 'fjr_custom_stock', 'export_stock_report', 'report_xlsx', 'uom', 'purchase', 'purchase_stock'],
+    'depends': ['base', 'web', 'product', 'stock', 'fjr_custom_stock', 'export_stock_report', 'report_xlsx', 'uom', 'purchase', 'purchase_stock', 'repack_stock'],
     'data': [
         'security/inventory_security.xml',
         'security/ir.model.access.csv',
