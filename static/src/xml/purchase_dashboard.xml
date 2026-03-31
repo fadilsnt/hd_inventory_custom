@@ -14,13 +14,26 @@
                         <span class="mx-1 text-muted">⇄</span>
                         <DateTimeInput type="'date'" onChange="onEndDateChanged"/>
 
-                        <button
-                            type="button"
-                            class="btn btn-outline-success btn-sm"
-                            style="width: 200px;"
-                            t-on-click="onClickPrintExcel">
-                            Xlsx Report
-                        </button>
+                        <!-- 🔽 Warehouse Dropdown -->
+                        <select class="form-select form-select-sm"
+                                t-on-change="onWarehouseChanged"
+                                style="width: 400px; 
+                                    border-radius: 8px; 
+                                    border: 1px solid #ced4da; 
+                                    padding: 4px 32px 4px 8px; 
+                                    font-size: 12px; 
+                                    white-space: nowrap; 
+                                    overflow: hidden; 
+                                    text-overflow: ellipsis;">
+                            <option value="">All Warehouse</option>
+                            <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                <option t-att-value="wh.id">
+                                    <t t-esc="wh.name"/>
+                                </option>
+                            </t>
+                        </select>
+
+                        <button type="button" class="btn btn-outline-success btn-sm" style="width: 300px; font-size: 12px;" t-on-click="onClickPrintExcel"> Xlsx Report</button>
                     </div>
                 </div>
             </div>

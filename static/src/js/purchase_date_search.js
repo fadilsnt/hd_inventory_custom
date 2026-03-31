@@ -13,12 +13,57 @@ export class DateSearch extends Component {
         this.state = useState({
             startDate: false,
             endDate: false,
+            warehouseId: false,
+            warehouses: [],
         });
 
-        // 🔑 WAJIB: bind context
         this.onStartDateChanged = this.onStartDateChanged.bind(this);
         this.onEndDateChanged = this.onEndDateChanged.bind(this);
+        this.onWarehouseChanged = this.onWarehouseChanged.bind(this);
         this.onClickPrintExcel = this.onClickPrintExcel.bind(this);
+
+        this.loadWarehouses();
+    }
+
+    async loadWarehouses() {
+        this.state.warehouses = await this.orm.searchRead(
+            "stock.warehouse",
+            [],
+            ["id", "name"]
+        );
+    }
+
+    onWarehouseChanged(ev) {
+        this.state.warehouseId = ev.target.value
+            ? parseInt(ev.target.value)
+            : false;
+
+        this.applySearch();
+    }
+
+    loadContextAndDomain() {
+        let domain = [];
+        let context = { ...this.props.context };
+
+        if (this.state.startDate) {
+            domain.push(["vendor_invoice_date", ">=", this.state.startDate]);
+            context.startDate = this.state.startDate;
+        }
+
+        if (this.state.endDate) {
+            domain.push(["vendor_invoice_date", "<=", this.state.endDate]);
+            context.endDate = this.state.endDate;
+        }
+
+        if (this.state.warehouseId) {
+            domain.push(["picking_type_id.warehouse_id", "=", this.state.warehouseId]);
+            context.warehouse_id = this.state.warehouseId;
+        }
+
+        const originDomain = this.getOriginDomain(this.props.domain);
+        domain = [...domain, ...originDomain];
+
+        return { domain, context };
     }
 
     // ========================
@@ -49,33 +94,12 @@ export class DateSearch extends Component {
         this.env.searchModel.search();
     }
 
-    loadContextAndDomain() {
-        let domain = [];
-        let context = { ...this.props.context };
-
-        if (this.state.startDate) {
-            domain.push(["create_date", ">=", this.state.startDate]);
-            context.startDate = this.state.startDate;
-        }
-
-        if (this.state.endDate) {
-            domain.push(["create_date", "<=", this.state.endDate]);
-            context.endDate = this.state.endDate;
-        }
-
-        // gabung domain lama (selain create_date)
-        const originDomain = this.getOriginDomain(this.props.domain);
-        domain = [...domain, ...originDomain];
-
-        return { domain, context };
-    }
-
     getOriginDomain(domain) {
         if (!Array.isArray(domain)) return [];
         return domain.filter(
             (item) =>
                 Array.isArray(item) &&
-                item[0] !== "create_date"
+                item[0] !== "vendor_invoice_date"
         );
     }
 

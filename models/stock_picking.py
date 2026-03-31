@@ -94,12 +94,55 @@ class StockPicking(models.Model):
 
         return scrap_location
 
+    def _compute_btb_number(self):
+        for picking in self.filtered(lambda p: p.picking_type_code == 'incoming'):
+            date_ref = picking.scheduled_date or picking.create_date
+            date_ref = fields.Datetime.context_timestamp(picking, date_ref)
+
+            tahun = date_ref.strftime('%y')
+            bulan_romawi = self._get_bulan_romawi(date_ref.month)
+
+            start_month = date_ref.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_month = (start_month + relativedelta(months=1)) - timedelta(microseconds=1)
+
+            domain = [
+                ('picking_type_code', '=', 'incoming'),
+                ('btb_number', '!=', False),
+                ('scheduled_date', '>=', start_month),
+                ('scheduled_date', '<=', end_month),
+            ]
+
+            last = self.env['stock.picking'].sudo().search(domain, order='id desc', limit=1)
+
+            if last and last.btb_number:
+                try:
+                    last_urutan = int(last.btb_number.split('/')[1])
+                    urutan = last_urutan + 1
+                except Exception:
+                    urutan = 1
+            else:
+                urutan = 1
+
+            warehouse = picking.picking_type_id.warehouse_id
+            warehouse_code = warehouse.code if warehouse else 'NA'
+
+            btb_number = f"BTB/{urutan:02d}/{bulan_romawi}/{tahun}/{warehouse_code}"
+
+            picking.sudo().write({'btb_number': btb_number})
+
+            # update ke PO
+            if picking.origin:
+                po = self.env['purchase.order'].sudo().search([('name','=', picking.origin)], limit=1)
+                if po:
+                    po.write({'btb_number': btb_number})
+
     def button_validate(self):
-        res = super().button_validate()
         _logger.info("Button Validate Inherit executed!")
+        self._compute_btb_number()
+
+        res = super().button_validate()
 
         for picking in self:
-
             if self.env['stock.move'].search([
                 ('picking_id', '=', picking.id),
                 ('is_consume', '=', True)
