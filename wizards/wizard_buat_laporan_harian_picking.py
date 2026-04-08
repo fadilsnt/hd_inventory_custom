@@ -1,4 +1,4 @@
-from odoo import models, fields, api
+from odoo import models, fields, api, _
 
 class WizardBuatLaporanHarianPicking(models.TransientModel):
     _name = 'wizard.buat.laporan.harian.picking'
@@ -25,7 +25,7 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
             move = self.picking_id.move_ids.filtered(lambda m: m.product_id == line.product_id)[:1]
 
             if not move:
-                move = self.env['stock.move'].create({
+                move = self.env['stock.move'].sudo().create({
                     'name': line.product_id.display_name,
                     'product_id': line.product_id.id,
                     'product_uom_qty': line.qty,
@@ -37,7 +37,7 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
             else:
                 move.product_uom_qty += line.qty
 
-            self.env['stock.move.line'].create({
+            self.env['stock.move.line'].sudo().create({
                 'picking_id': self.picking_id.id,
                 'move_id': move.id,
                 'product_id': line.product_id.id,
@@ -57,8 +57,6 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
                 'asumsi_berat_ikat': self.asumsi_berat_ikat
             })
             
-from odoo import models, fields, api
-
 class WizardBuatLaporanHarianPickingLine(models.TransientModel):
     _name = 'wizard.buat.laporan.harian.picking.line'
     _description = "Wizard Line"
