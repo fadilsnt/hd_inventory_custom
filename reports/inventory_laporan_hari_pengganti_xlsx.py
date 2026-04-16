@@ -74,6 +74,13 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     sw.name AS warehouse,
                     sml.oven_number AS oven,
                     sml.production_date AS production_date,
+                    sml.line_packing AS line_packing,
+                    sml.camp_tgl_briket AS camp_tgl_briket,
+                    sml.briket_tgu AS briket_tgu,
+                    sml.shift_briket AS shift_briket,
+                    sml.bkr AS bkr,
+                    sml.pembakar_penutup AS pembakar_penutup,
+                    sml.asumsi_berat_ikat AS asumsi_berat_ikat,
                     sml.product_id,
                     SUM(sml.quantity) AS qty,
                     sml.product_uom_id
@@ -87,7 +94,19 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 WHERE sp.scheduled_date::date = %(report_date)s
                 AND sp.state IN ('confirmed', 'assigned', 'done')
                 {warehouse_filter}
-                GROUP BY sw.name, sml.oven_number, sml.production_date, sml.product_id, sml.product_uom_id
+                GROUP BY 
+                    sw.name,
+                    sml.oven_number,
+                    sml.production_date,
+                    sml.line_packing,
+                    sml.camp_tgl_briket,
+                    sml.briket_tgu,
+                    sml.shift_briket,
+                    sml.bkr,
+                    sml.pembakar_penutup,
+                    sml.asumsi_berat_ikat,
+                    sml.product_id,
+                    sml.product_uom_id
             ),
 
             base_data AS (
@@ -95,6 +114,13 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     bm.warehouse,
                     bm.oven,
                     bm.production_date,
+                    bm.line_packing,
+                    bm.camp_tgl_briket,
+                    bm.briket_tgu,
+                    bm.shift_briket,
+                    bm.bkr,
+                    bm.pembakar_penutup,
+                    bm.asumsi_berat_ikat,                    
                     pt.name->>'en_US' AS product,
                     pc.name AS product_category,
                     uu.name->>'en_US' AS uom_category,
@@ -122,6 +148,13 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     bm.warehouse,
                     bm.oven,
                     bm.production_date,
+                    bm.line_packing,
+                    bm.camp_tgl_briket,
+                    bm.briket_tgu,
+                    bm.shift_briket,
+                    bm.bkr,
+                    bm.pembakar_penutup,
+                    bm.asumsi_berat_ikat,                    
                     pt.name->>'en_US',
                     pc.name,
                     uu.name,
@@ -134,6 +167,13 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     warehouse,
                     oven,
                     production_date,
+                    line_packing,
+                    camp_tgl_briket,
+                    briket_tgu,
+                    shift_briket,
+                    bkr,
+                    pembakar_penutup,
+                    asumsi_berat_ikat,                    
                     classification,
                     product_category,
                     uom_category,
@@ -175,6 +215,13 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     warehouse,
                     oven,
                     production_date,
+                    line_packing,
+                    camp_tgl_briket,
+                    briket_tgu,
+                    shift_briket,
+                    bkr,
+                    pembakar_penutup,
+                    asumsi_berat_ikat,                    
                     classification,
                     product_category,
                     uom_category,
@@ -198,6 +245,13 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                         json_build_object(
                             'oven', og.oven,
                             'production_date', og.production_date,
+                            'line_packing', og.line_packing,
+                            'camp_tgl_briket', og.camp_tgl_briket,
+                            'briket_tgu', og.briket_tgu,
+                            'shift_briket', og.shift_briket,
+                            'bkr', og.bkr,
+                            'pembakar_penutup', og.pembakar_penutup,
+                            'asumsi_berat_ikat', og.asumsi_berat_ikat,                            
                             'classification', og.classification,
                             'product_category', og.product_category,
                             'uom_category', og.uom_category,
@@ -494,15 +548,34 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 total_per_grade["UNCLASSIFIED"] = unclassified_total
 
             # ================= STATIC PICKING ROWS =================
-            static_rows = ["CAMP.", "BRKT TUNGGU JAM", "SHIFT BRIKEТ/РА",
-                        "BKR(HR/JM)/KROAK", "PEMBAKAR/PENUTUP", "ASUMSI/BERAT PER IKAT"]
+            static_map = [
+                ("CAMP.", "camp_tgl_briket"),
+                ("BRKT TUNGGU JAM", "briket_tgu"),
+                ("SHIFT BRIKET/PA", "shift_briket"),
+                ("BKR(HR/JM)/KROAK", "bkr"),
+                ("PEMBAKAR/PENUTUP", "pembakar_penutup"),
+                ("ASUMSI/BERAT PER IKAT", "asumsi_berat_ikat"),
+            ]
+
             row = header_row + 1
-            for label in static_rows:
+
+            for label, field in static_map:
                 sheet.write(row, 0, label, fmt_grade)
                 col = 1
-                for _ in oven_list:
-                    sheet.merge_range(row, col, row, col + 1, "", fmt_number)
+
+                for oven in oven_list:
+                    value = ""
+
+                    for o in ovens:
+                        oven_key = _get_oven_key(o.get("oven"), o.get("production_date")) or "NONE"
+
+                        if oven_key == oven:
+                            value = o.get(field) or ""
+                            break
+
+                    sheet.merge_range(row, col, row, col + 1, value, fmt_number)
                     col += 2
+
                 row += 1
 
             # ================= WRITE DATA (GRADE) =================
