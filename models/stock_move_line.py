@@ -13,7 +13,7 @@ class StockMoveLine(models.Model):
     pembakar_penutup = fields.Char(string="Pembakar / Penutup")
     asumsi_berat_ikat = fields.Char(string="Asumsi Berat @Ikat")    
     from_wizard = fields.Boolean(default=False)
-    product_uom_id = fields.Many2one('uom.uom', string='Unit of Measure', required=True, domain="[('category_id', '=', product_uom_category_id)]")
+    product_uom_id = fields.Many2one('uom.uom', string='Unit of Measure', required=True, domain="[('category_id', '=', product_uom_category_id)]", readonly=True)
 
     @api.onchange('product_id', 'move_id')
     def _onchange_product_uom_id(self):
