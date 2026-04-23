@@ -17,6 +17,7 @@
         <field name="bkr" optional="hide"/>
         <field name="pembakar_penutup" optional="hide"/>
         <field name="asumsi_berat_ikat" optional="hide"/>
+        <field name="from_wizard" optional="hide"/>
       </xpath>      
     </field>
   </record>

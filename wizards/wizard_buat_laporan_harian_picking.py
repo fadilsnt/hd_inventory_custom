@@ -30,18 +30,24 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
             lambda m: m.product_id == line.product_id
         )[:1]
 
+        # 🔑 konversi qty ke UoM move
+        qty_in_move_uom = line.product_uom_id._compute_quantity(
+            line.qty,
+            line.product_id.uom_id
+        )
+
         if not move:
             move = self.env['stock.move'].sudo().create({
                 'name': line.product_id.display_name,
                 'product_id': line.product_id.id,
-                'product_uom_qty': line.qty,
+                'product_uom_qty': qty_in_move_uom,  # ✅ pakai hasil konversi
                 'product_uom': line.product_id.uom_id.id,
                 'picking_id': self.picking_id.id,
                 'location_id': self.picking_id.location_id.id,
                 'location_dest_id': self.location_dest_id.id,
             })
         else:
-            move.product_uom_qty += line.qty
+            move.product_uom_qty += qty_in_move_uom  # ✅ tambah hasil konversi
 
         return move
 
@@ -66,11 +72,12 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
 
     def _prepare_move_line_vals(self, move, line):
         return {
+            'from_wizard': True,
             'picking_id': self.picking_id.id,
             'move_id': move.id,
             'product_id': line.product_id.id,
             'quantity': line.qty,
-            'product_uom_id': line.product_id.uom_id.id,
+            'product_uom_id': line.product_uom_id.id,
             'location_id': move.location_id.id,
             'location_dest_id': self.location_dest_id.id,
             'owner_id': move.owner_id.id,
@@ -82,7 +89,7 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
             'shift_briket': self.shift_briket,
             'bkr': self.bkr,
             'pembakar_penutup': self.pembakar_penutup,
-            'asumsi_berat_ikat': self.asumsi_berat_ikat
+            'asumsi_berat_ikat': self.asumsi_berat_ikat,
         }
 
     def _upsert_move_line(self, move, line):
@@ -103,7 +110,7 @@ class WizardBuatLaporanHarianPickingLine(models.TransientModel):
     wizard_id = fields.Many2one('wizard.buat.laporan.harian.picking', required=True, ondelete='cascade')
     product_id = fields.Many2one('product.product', string="Product")
     product_uom_category_id = fields.Many2one('uom.category', related='product_id.uom_id.category_id', store=False, readonly=True)
-    product_uom_id = fields.Many2one('uom.uom', string='Unit of Measure', domain="[('category_id', '=', product_uom_category_id)]", readonly=True)
+    product_uom_id = fields.Many2one('uom.uom', string='Unit of Measure', domain="[('category_id', '=', product_uom_category_id)]")
 
     qty = fields.Float(string="Qty")
 
