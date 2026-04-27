@@ -21,6 +21,8 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
     def action_apply(self):
         self.ensure_one()
 
+        self = self.sudo()
+
         for line in self.product_line_ids:
             move = self._get_or_create_move(line)
             self._upsert_move_line(move, line)
@@ -68,6 +70,7 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
         )    
 
     def _prepare_move_line_vals(self, move, line):
+        move = move.sudo()
         return {
             'from_wizard': True,
             'picking_id': self.picking_id.id,
@@ -95,7 +98,7 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
         matched = candidates.filtered(lambda ml: self._is_same_key(ml))
 
         if matched:
-            matched[0].quantity += line.qty
+            matched[0].sudo().quantity += line.qty
         else:
             vals = self._prepare_move_line_vals(move, line)
             self.env['stock.move.line'].sudo().create(vals)
