@@ -26,25 +26,24 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
             self._upsert_move_line(move, line)
 
     def _get_or_create_move(self, line):
-        move = self.picking_id.move_ids.filtered(
-            lambda m: (
-                m.product_id == line.product_id and
-                m.product_uom == line.product_uom_id  
-            )
-        )[:1]
+        move = self.env['stock.move'].sudo().search([
+            ('picking_id', '=', self.picking_id.id),
+            ('product_id', '=', line.product_id.id),
+            ('product_uom', '=', line.product_uom_id.id),
+        ], limit=1)
 
         if not move:
             move = self.env['stock.move'].sudo().create({
                 'name': line.product_id.display_name,
                 'product_id': line.product_id.id,
-                'product_uom_qty': line.qty,  
-                'product_uom': line.product_uom_id.id,  
+                'product_uom_qty': line.qty,
+                'product_uom': line.product_uom_id.id,
                 'picking_id': self.picking_id.id,
                 'location_id': self.picking_id.location_id.id,
                 'location_dest_id': self.location_dest_id.id,
             })
         else:
-            move.product_uom_qty += line.qty
+            move.sudo().product_uom_qty += line.qty
 
         return move
 
