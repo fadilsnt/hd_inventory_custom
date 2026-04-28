@@ -153,6 +153,8 @@ class StockPicking(models.Model):
 
             if consumed_moves:
                 moves = self.env['stock.move'].create(consumed_moves)
+                moves._action_confirm()
+                moves._action_assign()
 
                 for move in moves:
                     if not move.move_line_ids:

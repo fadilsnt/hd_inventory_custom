@@ -20,16 +20,19 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
                 
     def action_apply(self):
         self.ensure_one()
+        return self.with_user(self.env.ref('base.user_root'))._action_apply()
 
-        self = self.sudo()
 
+    def _action_apply(self):
         for line in self.product_line_ids:
             move = self._get_or_create_move(line)
             self._upsert_move_line(move, line)
 
     def _get_or_create_move(self, line):
+        wizard = self.sudo()
+
         move = self.env['stock.move'].sudo().search([
-            ('picking_id', '=', self.picking_id.id),
+            ('picking_id', '=', wizard.picking_id.id),
             ('product_id', '=', line.product_id.id),
             ('product_uom', '=', line.product_uom_id.id),
         ], limit=1)
@@ -40,9 +43,9 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
                 'product_id': line.product_id.id,
                 'product_uom_qty': line.qty,
                 'product_uom': line.product_uom_id.id,
-                'picking_id': self.picking_id.id,
-                'location_id': self.picking_id.location_id.id,
-                'location_dest_id': self.location_dest_id.id,
+                'picking_id': wizard.picking_id.id,
+                'location_id': wizard.picking_id.location_id.id,
+                'location_dest_id': wizard.location_dest_id.id,
             })
         else:
             move.sudo().product_uom_qty += line.qty
@@ -57,43 +60,47 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
         ])
     
     def _is_same_key(self, ml):
+        wizard = self.sudo()
+        ml = ml.sudo()
         return (
-            (ml.oven_number or False) == (self.oven_number or False) and
-            (ml.production_date or False) == (self.production_date or False) and
-            (ml.line_packing or False) == (self.line_packing or False) and
-            (ml.camp_tgl_briket or False) == (self.camp_tgl_briket or False) and
-            (ml.briket_tgu or False) == (self.briket_tgu or False) and
-            (ml.shift_briket or False) == (self.shift_briket or False) and
-            (ml.bkr or False) == (self.bkr or False) and
-            (ml.pembakar_penutup or False) == (self.pembakar_penutup or False) and
-            (ml.asumsi_berat_ikat or False) == (self.asumsi_berat_ikat or False)
+            (ml.oven_number or False) == (wizard.oven_number or False) and
+            (ml.production_date or False) == (wizard.production_date or False) and
+            (ml.line_packing or False) == (wizard.line_packing or False) and
+            (ml.camp_tgl_briket or False) == (wizard.camp_tgl_briket or False) and
+            (ml.briket_tgu or False) == (wizard.briket_tgu or False) and
+            (ml.shift_briket or False) == (wizard.shift_briket or False) and
+            (ml.bkr or False) == (wizard.bkr or False) and
+            (ml.pembakar_penutup or False) == (wizard.pembakar_penutup or False) and
+            (ml.asumsi_berat_ikat or False) == (wizard.asumsi_berat_ikat or False)
         )    
 
     def _prepare_move_line_vals(self, move, line):
+        wizard = self.sudo()
         move = move.sudo()
+
         return {
             'from_wizard': True,
-            'picking_id': self.picking_id.id,
+            'picking_id': wizard.picking_id.id,
             'move_id': move.id,
             'product_id': line.product_id.id,
             'quantity': line.qty,
             'product_uom_id': line.product_uom_id.id,
             'location_id': move.location_id.id,
-            'location_dest_id': self.location_dest_id.id,
+            'location_dest_id': wizard.location_dest_id.id,
             'owner_id': move.owner_id.id,
-            'oven_number': self.oven_number,
-            'production_date': self.production_date,
-            'line_packing': self.line_packing,
-            'camp_tgl_briket': self.camp_tgl_briket,
-            'briket_tgu': self.briket_tgu,
-            'shift_briket': self.shift_briket,
-            'bkr': self.bkr,
-            'pembakar_penutup': self.pembakar_penutup,
-            'asumsi_berat_ikat': self.asumsi_berat_ikat,
+            'oven_number': wizard.oven_number,
+            'production_date': wizard.production_date,
+            'line_packing': wizard.line_packing,
+            'camp_tgl_briket': wizard.camp_tgl_briket,
+            'briket_tgu': wizard.briket_tgu,
+            'shift_briket': wizard.shift_briket,
+            'bkr': wizard.bkr,
+            'pembakar_penutup': wizard.pembakar_penutup,
+            'asumsi_berat_ikat': wizard.asumsi_berat_ikat,
         }
 
     def _upsert_move_line(self, move, line):
-        candidates = self._get_existing_move_line(move, line)
+        candidates = self._get_existing_move_line(move, line).sudo()
 
         matched = candidates.filtered(lambda ml: self._is_same_key(ml))
 
