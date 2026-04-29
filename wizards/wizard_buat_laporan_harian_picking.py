@@ -22,7 +22,6 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
         self.ensure_one()
         return self.with_user(self.env.ref('base.user_root'))._action_apply()
 
-
     def _action_apply(self):
         for line in self.product_line_ids:
             move = self._get_or_create_move(line)
