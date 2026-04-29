@@ -20,34 +20,39 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
                 
     def action_apply(self):
         self.ensure_one()
-        return self.with_user(self.env.ref('base.user_root'))._action_apply()
+        return self.sudo().with_context(bypass_move_rule=True)._action_apply()
 
     def _action_apply(self):
+        self = self.sudo()
+
+        Move = self.env['stock.move'].sudo()
+        MoveLine = self.env['stock.move.line'].sudo()
+
         for line in self.product_line_ids:
-            move = self._get_or_create_move(line)
-            self._upsert_move_line(move, line)
+            move = self._get_or_create_move(line, Move)
+            self._upsert_move_line(move, line, MoveLine)
 
-    def _get_or_create_move(self, line):
-        wizard = self.sudo()
-
-        move = self.env['stock.move'].sudo().search([
-            ('picking_id', '=', wizard.picking_id.id),
+    def _get_or_create_move(self, line, Move):
+        move = Move.search([
+            ('picking_id', '=', self.picking_id.id),
             ('product_id', '=', line.product_id.id),
             ('product_uom', '=', line.product_uom_id.id),
         ], limit=1)
 
         if not move:
-            move = self.env['stock.move'].sudo().create({
+            move = Move.create({
                 'name': line.product_id.display_name,
                 'product_id': line.product_id.id,
                 'product_uom_qty': line.qty,
                 'product_uom': line.product_uom_id.id,
-                'picking_id': wizard.picking_id.id,
-                'location_id': wizard.picking_id.location_id.id,
-                'location_dest_id': wizard.location_dest_id.id,
+                'picking_id': self.picking_id.id,
+                'location_id': self.picking_id.location_id.id,
+                'location_dest_id': self.location_dest_id.id,
             })
         else:
-            move.sudo().product_uom_qty += line.qty
+            move.write({
+                'product_uom_qty': move.product_uom_qty + line.qty
+            })
 
         return move
 
@@ -98,16 +103,24 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
             'asumsi_berat_ikat': wizard.asumsi_berat_ikat,
         }
 
-    def _upsert_move_line(self, move, line):
-        candidates = self._get_existing_move_line(move, line).sudo()
+    def _upsert_move_line(self, move, line, MoveLine):
+        candidates = MoveLine.search([
+            ('move_id', '=', move.id),
+            ('product_id', '=', line.product_id.id),
+            ('product_uom_id', '=', line.product_uom_id.id),
+        ])
 
-        matched = candidates.filtered(lambda ml: self._is_same_key(ml))
+        wizard = self.sudo()
+
+        matched = candidates.filtered(lambda ml: wizard._is_same_key(ml))
 
         if matched:
-            matched[0].sudo().quantity += line.qty
+            matched[0].write({
+                'quantity': matched[0].quantity + line.qty
+            })
         else:
             vals = self._prepare_move_line_vals(move, line)
-            self.env['stock.move.line'].sudo().create(vals)
+            MoveLine.create(vals)
 
 class WizardBuatLaporanHarianPickingLine(models.TransientModel):
     _name = 'wizard.buat.laporan.harian.picking.line'
