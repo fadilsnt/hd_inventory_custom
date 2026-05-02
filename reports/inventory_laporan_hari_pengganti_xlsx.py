@@ -122,6 +122,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     bm.pembakar_penutup,
                     bm.asumsi_berat_ikat,                    
                     pt.name->>'en_US' AS product,
+                    pt.is_cl AS is_cl,
                     pc.name AS product_category,
                     uu.name->>'en_US' AS uom_category,
                     COALESCE(uu.weight_per_uom_category, 0) AS weight_per_uom_category,
@@ -156,6 +157,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     bm.pembakar_penutup,
                     bm.asumsi_berat_ikat,                    
                     pt.name->>'en_US',
+                    pt.is_cl,
                     pc.name,
                     uu.name,
                     uu.weight_per_uom_category,
@@ -181,6 +183,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
 
                     -- Tambahkan ini
                     MAX(weight_per_product_attribute) AS weight_per_product_attribute,
+                    is_cl AS is_cl,
                     -- Tambahkan ini
 
                     json_agg(
@@ -188,28 +191,43 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                             'product', product,
                             'qty',
                                 CASE
-                                    WHEN product_category IN ('LOKAL','FUEL')
-                                        THEN qty * COALESCE(weight_per_uom_category, 0)
+                                    WHEN product_category IN ('LOKAL','FUEL') THEN
+                                        CASE
+                                            WHEN is_cl THEN qty                      -- ✅ tidak dikali
+                                            ELSE qty * COALESCE(weight_per_uom_category, 0)
+                                        END
                                     ELSE qty
                                 END,
-                            -- Tambahankan ini
-                            'weight_per_product_attribute', weight_per_product_attribute
-                            -- Tambahankan ini
+                            'weight_per_product_attribute', weight_per_product_attribute,
+                            'is_cl', is_cl
                         ) ORDER BY product
                     ) AS products,
 
 
                     SUM(
                         CASE
-                            WHEN product_category = 'EXPORT'
-                                THEN qty * COALESCE(weight_per_product_attribute, 0)
-                            WHEN product_category IN ('LOKAL','FUEL')
-                                THEN qty * COALESCE(weight_per_uom_category, 0)
+                            WHEN product_category = 'EXPORT' THEN
+                                CASE
+                                    WHEN is_cl THEN qty   -- ✅ tidak dikali
+                                    ELSE qty * COALESCE(weight_per_product_attribute, 0)
+                                END
+
+                            WHEN product_category IN ('LOKAL','FUEL') THEN
+                                CASE
+                                    WHEN is_cl THEN qty   -- ✅ tidak dikali
+                                    ELSE qty * COALESCE(weight_per_uom_category, 0)
+                                END
+
                             ELSE qty
                         END
                     ) AS total_per_oven,
 
-                    SUM(qty * COALESCE(weight_per_uom_category, 0)) AS total_weight
+                    SUM(
+                        CASE
+                            WHEN is_cl THEN qty
+                            ELSE qty * COALESCE(weight_per_uom_category, 0)
+                        END
+                    ) AS total_weight
                 FROM base_data
                 GROUP BY
                     warehouse,
@@ -224,6 +242,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     asumsi_berat_ikat,                    
                     classification,
                     product_category,
+                    is_cl,
                     uom_category,
                     weight_per_uom_category
             ),
@@ -413,9 +432,6 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 match = re.search(r'\((\d+),?\)', warehouse_id)
                 if match:
                     warehouse = self.env['stock.warehouse'].browse(int(match.group(1)))
-
-
-
 
         date_today = format_tanggal_indonesia(report_date)
         data_report = self._get_data_xlsx_report(report_date, warehouse.id if warehouse else None)
@@ -701,9 +717,11 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                                 product = p.get("product")
                                 qty = p.get("qty", 0)
                                 weight = p.get("weight_per_product_attribute", 0)
-                                value = qty * weight
-                                
+                                is_cl = p.get("is_cl", False)
+                                _logger.info("Is CL Pada EXPORT: %s", is_cl)
 
+                                value = qty if is_cl else qty * weight
+                                
                                 product_qty[product] = product_qty.get(product, 0) + value
 
                     if not product_qty:
@@ -726,7 +744,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 for p_name, p_data in sorted(aggregated_special.items()):
                     category = p_data.get("category", "-")
 
-                    total_qty = 0.0
+                    total_qty = {}  # {uom: total}
                     for o in ovens:
                         if o.get("product_category") != category:
                             continue
@@ -734,12 +752,20 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                         for p in o.get("products", []):
                             if p.get("product") == p_name:
                                 qty = p.get("qty", 0)
-                                weight = p.get("weight_per_product_attribute", 1)
-                                total_qty += qty * weight   # 🔥 FIX UTAMA
+                                uom = o.get("uom_category")
+                                is_cl = p.get("is_cl", False)
+
+                                # 🔥 untuk LOKAL/FUEL pakai weight_per_uom_category
+                                weight = o.get("weight_per_uom_category", 1)
+
+
+                                total_qty[uom] = total_qty.get(uom, 0) + qty
 
                     sheet.write(grade_row, grade_col_start, p_name, fmt_text_center)
-                    sheet.write(grade_row, grade_col_start + 1, fmt_qty(total_qty), fmt_number)
-                    sheet.write(grade_row, grade_col_start + 2, fmt_qty(total_qty), fmt_grade_total)
+                    qty_str = " | ".join(fmt_qty(v) for v in total_qty.values())
+
+                    sheet.write(grade_row, grade_col_start + 1, qty_str, fmt_number)
+                    sheet.write(grade_row, grade_col_start + 2, qty_str, fmt_grade_total)
                     sheet.write(grade_row, grade_col_start + 3, category, fmt_grade)
 
                     grade_row += 1
@@ -753,9 +779,10 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
 
                 for p in o.get("products", []):
                     qty = p.get("qty", 0)
+                    weight = p.get("weight_per_product_attribute", 0)
+                    is_cl = p.get("is_cl", False)
 
                     if category == "EXPORT":
-                        weight = p.get("weight_per_product_attribute", 0)
                         total_all_grades += qty * weight
                     elif category in ["LOKAL", "FUEL"]:
                         total_all_grades += qty

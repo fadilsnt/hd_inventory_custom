@@ -30,6 +30,12 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
 
         for line in self.product_line_ids:
             move = self._get_or_create_move(line, Move)
+
+            MoveLine.search([
+                ('move_id', '=', move.id),
+                ('from_wizard', '=', False)
+            ]).unlink()
+
             self._upsert_move_line(move, line, MoveLine)
 
     def _get_or_create_move(self, line, Move):
@@ -39,8 +45,10 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
             ('product_uom', '=', line.product_uom_id.id),
         ], limit=1)
 
+        ctx = dict(self.env.context, bypass_move_line_create=True)
+
         if not move:
-            move = Move.create({
+            move = Move.with_context(ctx).create({
                 'name': line.product_id.display_name,
                 'product_id': line.product_id.id,
                 'product_uom_qty': line.qty,
@@ -50,7 +58,7 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
                 'location_dest_id': self.location_dest_id.id,
             })
         else:
-            move.write({
+            move.with_context(ctx).write({
                 'product_uom_qty': move.product_uom_qty + line.qty
             })
 
@@ -104,19 +112,28 @@ class WizardBuatLaporanHarianPicking(models.TransientModel):
         }
 
     def _upsert_move_line(self, move, line, MoveLine):
-        candidates = MoveLine.search([
+        wizard = self.sudo()
+
+        candidate = MoveLine.search([
             ('move_id', '=', move.id),
             ('product_id', '=', line.product_id.id),
             ('product_uom_id', '=', line.product_uom_id.id),
-        ])
+            ('from_wizard', '=', True),
 
-        wizard = self.sudo()
+            ('oven_number', '=', wizard.oven_number or False),
+            ('production_date', '=', wizard.production_date or False),
+            ('line_packing', '=', wizard.line_packing or False),
+            ('camp_tgl_briket', '=', wizard.camp_tgl_briket or False),
+            ('briket_tgu', '=', wizard.briket_tgu or False),
+            ('shift_briket', '=', wizard.shift_briket or False),
+            ('bkr', '=', wizard.bkr or False),
+            ('pembakar_penutup', '=', wizard.pembakar_penutup or False),
+            ('asumsi_berat_ikat', '=', wizard.asumsi_berat_ikat or False),
+        ], limit=1)
 
-        matched = candidates.filtered(lambda ml: wizard._is_same_key(ml))
-
-        if matched:
-            matched[0].write({
-                'quantity': matched[0].quantity + line.qty
+        if candidate:
+            candidate.write({
+                'quantity': candidate.quantity + line.qty
             })
         else:
             vals = self._prepare_move_line_vals(move, line)

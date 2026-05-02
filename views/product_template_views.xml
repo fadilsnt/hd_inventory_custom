@@ -8,6 +8,7 @@
             <xpath expr="//field[@name='sales_person_ids']" position="before">
                 <field name="owner_id" string="Sales" options="{'no_create': True}"/>
                 <field name="consume_product_ids" groups="stock.group_stock_manager" widget="many2many_tags"/>
+                <field name="is_cl" invisible="categ_id != 4" groups="stock.group_stock_manager"/>
             </xpath>
         </field>
     </record>
