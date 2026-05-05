@@ -189,15 +189,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     json_agg(
                         json_build_object(
                             'product', product,
-                            'qty',
-                                CASE
-                                    WHEN product_category IN ('LOKAL','FUEL') THEN
-                                        CASE
-                                            WHEN is_cl THEN qty                      -- ✅ tidak dikali
-                                            ELSE qty * COALESCE(weight_per_uom_category, 0)
-                                        END
-                                    ELSE qty
-                                END,
+                            'qty', qty,
                             'weight_per_product_attribute', weight_per_product_attribute,
                             'is_cl', is_cl
                         ) ORDER BY product
@@ -213,10 +205,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                                 END
 
                             WHEN product_category IN ('LOKAL','FUEL') THEN
-                                CASE
-                                    WHEN is_cl THEN qty   -- ✅ tidak dikali
-                                    ELSE qty * COALESCE(weight_per_uom_category, 0)
-                                END
+                                qty * COALESCE(weight_per_uom_category, 0)
 
                             ELSE qty
                         END
@@ -706,6 +695,7 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 grade_row = grade_start_row
                 for grade in sorted(data_map.keys(), key=_grade_sort_key):
                     product_qty = {}
+                    product_qty_raw = {}  # <-- tambahan
 
                     # ================= EXPORT =================
                     if grade not in ["LOKAL", "FUEL"]:
@@ -718,18 +708,23 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                                 qty = p.get("qty", 0)
                                 weight = p.get("weight_per_product_attribute", 0)
                                 is_cl = p.get("is_cl", False)
-                                _logger.info("Is CL Pada EXPORT: %s", is_cl)
 
+                                # ================= QTY ASLI =================
+                                product_qty_raw[product] = product_qty_raw.get(product, 0) + qty
+
+                                # ================= TOTAL =================
                                 value = qty if is_cl else qty * weight
-                                
                                 product_qty[product] = product_qty.get(product, 0) + value
 
                     if not product_qty:
                         continue
 
                     products = sorted(product_qty.keys())
-                    qtys = [fmt_qty(product_qty[p]) for p in products]
 
+                    # QTY tanpa perkalian
+                    qtys = [fmt_qty(product_qty_raw[p]) for p in products]
+
+                    # TOTAL pakai weight
                     total_grade = fmt_qty(sum(product_qty.values()))
 
                     sheet.write(grade_row, grade_col_start, " | ".join(products), fmt_text_center)
@@ -738,13 +733,15 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                     sheet.write(grade_row, grade_col_start + 3, grade, fmt_grade)
 
                     grade_row += 1
-
+                    
             # ================= LOOP PRODUK LOKAL / FUEL =================
             if aggregated_special:
                 for p_name, p_data in sorted(aggregated_special.items()):
                     category = p_data.get("category", "-")
 
-                    total_qty = {}  # {uom: total}
+                    total_qty = {}         # qty asli
+                    total_weighted = {}    # qty * weight
+
                     for o in ovens:
                         if o.get("product_category") != category:
                             continue
@@ -755,21 +752,25 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                                 uom = o.get("uom_category")
                                 is_cl = p.get("is_cl", False)
 
-                                # 🔥 untuk LOKAL/FUEL pakai weight_per_uom_category
                                 weight = o.get("weight_per_uom_category", 1)
 
-
+                                # ================= QTY =================
                                 total_qty[uom] = total_qty.get(uom, 0) + qty
 
-                    sheet.write(grade_row, grade_col_start, p_name, fmt_text_center)
-                    qty_str = " | ".join(fmt_qty(v) for v in total_qty.values())
+                                # ================= TOTAL =================
+                                value = qty if is_cl else qty * weight
+                                total_weighted[uom] = total_weighted.get(uom, 0) + value
 
-                    sheet.write(grade_row, grade_col_start + 1, qty_str, fmt_number)
-                    sheet.write(grade_row, grade_col_start + 2, qty_str, fmt_grade_total)
+                    # ================= FORMAT =================
+                    qty_str = " | ".join(fmt_qty(v) for v in total_qty.values())
+                    total_str = " | ".join(fmt_qty(v) for v in total_weighted.values())
+
+                    sheet.write(grade_row, grade_col_start, p_name, fmt_text_center)
+                    sheet.write(grade_row, grade_col_start + 1, qty_str, fmt_number)          # ✅ qty asli
+                    sheet.write(grade_row, grade_col_start + 2, total_str, fmt_grade_total)   # ✅ sudah dikali weight
                     sheet.write(grade_row, grade_col_start + 3, category, fmt_grade)
 
                     grade_row += 1
-
 
             # ================= TOTAL SELURUH GRADE & RATA-RATA =================
             total_all_grades = 0
@@ -780,12 +781,13 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 for p in o.get("products", []):
                     qty = p.get("qty", 0)
                     weight = p.get("weight_per_product_attribute", 0)
+                    weight_lokal = o.get("weight_per_uom_category", 1)
                     is_cl = p.get("is_cl", False)
 
                     if category == "EXPORT":
                         total_all_grades += qty * weight
                     elif category in ["LOKAL", "FUEL"]:
-                        total_all_grades += qty
+                        total_all_grades += qty if is_cl else qty * weight_lokal
 
             sheet.write(grade_row, grade_col_start + 2, fmt_qty(total_all_grades), fmt_total)
             sheet.write(grade_row, grade_col_start + 3, "TTL TONASE", fmt_header)
