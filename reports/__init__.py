@@ -1,1 +1,2 @@
 from . import inventory_laporan_hari_pengganti_xlsx
+from . import laporan_sparepart_bulanan_xlsx

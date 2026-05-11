@@ -277,6 +277,178 @@
         </field>
     </record>
 
+    <!-- Start Sparepart -->
+    <record id="view_stock_picking_sparepart_usage_tree" model="ir.ui.view">
+        <field name="name">stock.picking.sparepart.usage.tree</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <list string="Sparepart Usage" decoration-success="state == 'done'" decoration-warning="state == 'assigned'" decoration-info="state == 'confirmed'">
+                <field name="name"/>
+                <field name="scheduled_date"/>
+                <field name="origin"/>
+                <field name="location_id"/>
+                <field name="location_dest_id"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_stock_picking_sparepart_usage_form" model="ir.ui.view">
+        <field name="name">stock.picking.sparepart.usage.form</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <form string="Sparepart Usage">
+                <header>
+                    <button name="action_confirm" invisible="state != 'draft'" string="Mark as Todo" type="object" class="oe_highlight" groups="base.group_user" data-hotkey="q"/>
+                    <button name="action_assign" invisible="not show_check_availability" string="Check Availability" type="object" class="oe_highlight" groups="base.group_user" data-hotkey="w"/>                
+                    <button name="button_validate" string="Validate" type="object" class="btn-success" invisible="state not in ('assigned','confirmed')"/>
+                    <button name="action_cancel" invisible="state not in ('assigned', 'confirmed', 'draft', 'waiting')" string="Cancel" groups="base.group_user" type="object" confirm="Are you sure you want to cancel this transfer?" data-hotkey="x"/>
+                    <button name="action_return_sparepart" string="Return Sparepart" type="object" class="btn-secondary" invisible="state != 'done'"/>                    
+                    <field name="state" widget="statusbar" statusbar_visible="draft,confirmed,assigned,done"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Done" bg_color="text-bg-success" invisible="state != 'done'"/>                
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_detailed_operations"
+                            class="oe_stat_button"
+                            icon="fa-bars"
+                            type="object"
+                            help="List view of detailed operations">
+                            <div class="o_form_field o_stat_info">
+                                <span class="o_stat_text">Moves</span>
+                            </div>
+                        </button>
+                        <button name="action_view_return_pickings"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-undo">
+                            <field name="return_count" widget="statinfo" string="Returns"/>
+                        </button>                        
+                    </div>                
+                    <div class="oe_title">
+                        <h1 class="d-flex">
+                            <div invisible="id">New <field name="picking_type_code"/></div>
+                            <field name="name" invisible="not id" readonly="1"/>
+                        </h1>
+                    </div>  
+                    <group string="Operation Information">
+                        <group>
+                            <field name="picking_type_id" readonly="1"/>
+                        </group>
+
+                        <group>
+                            <field name="date_done" invisible="state != 'done'"/>
+                            <field name="products_availability_state" invisible="1"/>
+                            <field name="products_availability"
+                                invisible="picking_type_code != 'outgoing' or state not in ['confirmed', 'waiting', 'assigned']"
+                                decoration-success="state == 'assigned' or products_availability_state == 'available'"
+                                decoration-warning="state != 'assigned' and products_availability_state in ('expected', 'available')"
+                                decoration-danger="state != 'assigned' and products_availability_state == 'late'"/>
+                            <field name="date_done" string="Effective Date" invisible="state != 'done'"/>                            
+                            <field name="is_sparepart_usage" invisible="1"/>                            
+                        </group>
+                    </group>
+
+                    <group string="Request Information">
+                        <group>
+                            <field name="requestor_id" readonly="state in ['confirmed', 'waiting', 'assigned', 'done']" required="is_sparepart_usage"/>
+                            <field name="scheduled_date" readonly="state in ['confirmed', 'waiting', 'assigned', 'done']"/>
+                            <field name="sparepart_usage_attachment" invisible="not is_sparepart_usage" widget="many2many_binary" required="is_sparepart_usage" readonly="state in ['confirmed', 'waiting', 'assigned', 'done']"/>
+                        </group>
+                        <group>
+                            <field name="location_id" readonly="1"/>
+                            <field name="location_dest_id" readonly="1"/>
+                        </group>
+                    </group>                                  
+                    <notebook>
+                        <page string="Sparepart Details">
+                            <field name="move_ids_without_package" 
+                                mode="list"
+                                widget="stock_move_one2many"
+                                readonly="state == 'done' and is_locked"
+                                context="{
+                                        'default_picking_id': id,
+                                        'default_picking_type_id': picking_type_id,
+                                        'default_location_id': location_id,
+                                        'default_location_dest_id': location_dest_id,
+                                        'default_company_id': company_id
+                                }">
+                                <list editable="bottom">
+                                    <field name="company_id" column_invisible="1"/>
+                                    <field name="picking_id" column_invisible="1"/>
+                                    <field name="name" column_invisible="1"/>
+                                    <field name="state" column_invisible="1"/>
+                                    <field name="location_id" column_invisible="1"/>
+                                    <field name="location_dest_id" column_invisible="1"/>
+                                    <field name="product_uom_category_id" column_invisible="1"/>                                
+                                    <field name="sparepart_category_id" column_invisible="1"/>
+
+                                    <field name="product_id" context="{'default_is_storable': True}" options='{"no_open": True,"no_create": 1, "no_create_edit": 1}' domain="[('categ_id', 'child_of', sparepart_category_id)]" force_save="1"/>
+                                    <field name="product_uom_qty" string="Demand" readonly="not is_initial_demand_editable"/>
+                                    <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
+                                        invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
+                                    <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
+                                        invisible="not product_id or product_uom_qty == 0 or quantity &gt; 0 or forecast_availability &gt; 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
+                                    <field name="forecast_expected_date" column_invisible="True"/>
+                                    <field name="forecast_availability" string="Forecast" optional="hide"
+                                        column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
+                                    <field name="product_qty" readonly="1" column_invisible="True"/>
+                                    <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                                    <field name="product_uom" string="UoM"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Note" name="note">
+                            <field name="note" string="Note" placeholder="Add an internal note that will be printed on the Picking Operations sheet"/>
+                        </page>                        
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>    
+
+    <record id="view_stock_picking_sparepart_usage_search" model="ir.ui.view">
+        <field name="name">stock.picking.sparepart.usage.search</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <search string="Search Sparepart Usage">
+                <field name="name"/>
+                <field name="origin"/>
+                <field name="state"/>
+                <filter string="Draft" name="draft" domain="[('state','=','draft')]"/>
+                <filter string="Waiting" name="waiting" domain="[('state','=','confirmed')]"/>
+                <filter string="Ready" name="ready" domain="[('state','=','assigned')]"/>
+                <filter string="Done" name="done" domain="[('state','=','done')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Status" name="group_state" context="{'group_by':'state'}"/>
+                    <filter string="Scheduled Date" name="group_date" context="{'group_by':'scheduled_date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>    
+
+    <record id="action_stock_picking_sparepart_usage" model="ir.actions.act_window">
+        <field name="name">Sparepart Usage</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_ids"
+            eval="[(5, 0, 0),
+                (0, 0, {'view_mode': 'list','view_id': ref('hd_inventory_custom.view_stock_picking_sparepart_usage_tree')}),
+                (0, 0, {'view_mode': 'form','view_id': ref('hd_inventory_custom.view_stock_picking_sparepart_usage_form')})
+            ]"/>        
+        <field name="search_view_id" ref="hd_inventory_custom.view_stock_picking_sparepart_usage_search"/>
+        <field name="domain" eval="[('picking_type_id', '=', ref('hd_inventory_custom.picking_type_sparepart_usage'))]"/>
+        <field name="context"
+            eval="{
+                'default_picking_type_id': ref('hd_inventory_custom.picking_type_sparepart_usage'),
+                'default_location_id': ref('stock.stock_location_stock'),
+                'default_location_dest_id': ref('hd_inventory_custom.stock_location_sparepart_usage'),
+            }"/>
+    </record>
+
+    <menuitem id="menu_sparepart_request" name="Usage Request" parent="stock.menu_stock_transfers" action="action_stock_picking_sparepart_usage" sequence="25"/>           
+    <!-- End Sparepart -->
 
     <!-- Incoming / Receipts -->
     <record id="action_picking_view_only_incoming" model="ir.actions.act_window">

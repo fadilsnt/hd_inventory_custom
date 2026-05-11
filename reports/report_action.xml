@@ -40,4 +40,13 @@
         <field name="binding_model_id" ref="stock.model_stock_picking"/>
         <field name="binding_type">report</field>
     </record>     
+
+    <record id="report_laporan_sparepart_xlsx" model="ir.actions.report">
+        <field name="name">Laporan Sparepart XLSX</field>
+        <field name="model">wizard.laporan.sparepart.bulanan</field>
+        <field name="report_type">xlsx</field>
+        <field name="report_name">hd_inventory_custom.report_laporan_sparepart_xlsx</field>
+        <field name="report_file">laporan_sparepart</field>
+        <field name="binding_model_id" ref="model_wizard_laporan_sparepart_bulanan"/>
+    </record>    
 </odoo>

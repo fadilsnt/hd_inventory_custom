@@ -5,7 +5,7 @@ from datetime import timedelta
 import logging
 from odoo.tools.float_utils import float_compare, float_is_zero
 from collections import defaultdict
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -21,6 +21,61 @@ class StockPicking(models.Model):
     partner_ref = fields.Char('Vendor Reference', copy=False, help="Reference of the sales order or bid sent by the vendor.")
     consume_move_ids = fields.One2many('stock.move', 'picking_id', string='Consume Moves', domain=[('is_consume', '=', True)])    
     move_ids_without_package = fields.One2many('stock.move', 'picking_id', string="Stock move", domain=['|', ('package_level_id', '=', False), ('picking_type_entire_packs', '=', False), ('is_consume', '=', False)])    
+    sparepart_usage_attachment = fields.Many2many('ir.attachment', 'stock_picking_sparepart_attachment_rel', 'picking_id', 'attachment_id', string="Damage Evidence Attachment", help="Lampiran bukti sparepart sebelumnya rusak.")
+    is_sparepart_usage = fields.Boolean(string="Is Sparepart Usage", compute="_compute_is_sparepart_usage", store=True)
+    requestor_id = fields.Many2one('res.users', string='Requestor', tracking=True, states={'draft': [('readonly', False)]},)
+    return_picking_ids = fields.One2many('stock.picking', 'origin_picking_id', string="Return Pickings")    
+    return_count = fields.Integer(string="Return Count", compute="_compute_return_count")
+    origin_picking_id = fields.Many2one('stock.picking', string="Origin Pickings")
+  
+    def _compute_return_count(self):
+        for rec in self:
+            rec.return_count = self.env['stock.picking'].search_count([('origin_picking_id', '=', rec.id)])    
+
+    def action_view_return_pickings(self):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Return Pickings'),
+            'res_model': 'stock.picking',
+            'view_mode': 'list,form',
+            'domain': [('origin_picking_id', '=', self.id)],
+            'context': {'default_origin_picking_id': self.id}
+        }            
+
+    def action_return_sparepart(self):
+        self.ensure_one()
+
+        return {
+            'name': _('Return Sparepart'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.return.picking',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'active_id': self.id,
+                'active_ids': self.ids,
+                'active_model': 'stock.picking',
+                'default_is_return_sparepart': True
+            }
+        }    
+
+    @api.depends('picking_type_id')
+    def _compute_is_sparepart_usage(self):
+        picking_type = self.env.ref('hd_inventory_custom.picking_type_sparepart_usage', raise_if_not_found=False)
+
+        for rec in self:
+            rec.is_sparepart_usage = bool(
+                picking_type
+                and rec.picking_type_id.id == picking_type.id
+            )
+
+    @api.constrains('sparepart_usage_attachment', 'picking_type_id')
+    def _check_sparepart_attachment(self):
+        for rec in self:
+            if rec.is_sparepart_usage and not rec.sparepart_usage_attachment:
+                raise ValidationError(
+                    _("Damage evidence attachment is required for sparepart usage.")
+                )
 
     def _validate_consume_products(self, picking):
         errors = []
@@ -138,11 +193,42 @@ class StockPicking(models.Model):
 
     def button_validate(self):
         _logger.info("Button Validate Inherit executed!")
+
+        for picking in self:
+
+            if picking.is_sparepart_usage:
+                for move in picking.move_ids_without_package:
+                    if move.product_id.type != 'product':
+                        continue
+
+                    available_qty = move.product_id.with_context(
+                        location=move.location_id.id
+                    ).free_qty
+
+                    if float_compare(
+                        move.product_uom_qty,
+                        available_qty,
+                        precision_rounding=move.product_uom.rounding
+                    ) > 0:
+
+                        raise ValidationError(_(
+                            "Insufficient stock for product %s\n\n"
+                            "Available Stock : %s %s\n"
+                            "Requested Qty   : %s %s"
+                        ) % (
+                            move.product_id.display_name,
+                            available_qty,
+                            move.product_uom.name,
+                            move.product_uom_qty,
+                            move.product_uom.name,
+                        ))
+
         self._compute_btb_number()
 
         res = super().button_validate()
 
         for picking in self:
+
             if self.env['stock.move'].search([
                 ('picking_id', '=', picking.id),
                 ('is_consume', '=', True)
@@ -152,12 +238,16 @@ class StockPicking(models.Model):
             consumed_moves = self._validate_consume_products(picking)
 
             if consumed_moves:
+
                 moves = self.env['stock.move'].create(consumed_moves)
+
                 moves._action_confirm()
                 moves._action_assign()
 
                 for move in moves:
+
                     if not move.move_line_ids:
+
                         self.env['stock.move.line'].create({
                             'move_id': move.id,
                             'product_id': move.product_id.id,
@@ -166,6 +256,7 @@ class StockPicking(models.Model):
                             'location_id': move.location_id.id,
                             'location_dest_id': move.location_dest_id.id,
                         })
+
                     else:
                         for ml in move.move_line_ids:
                             ml.quantity = move.product_uom_qty

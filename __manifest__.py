@@ -12,12 +12,17 @@
     'support': "echovoid14@gmail.com",
     'category': 'Inventory',
     'version': '0.1',
-    'depends': ['base', 'web', 'product', 'stock', 'fjr_custom_stock', 'export_stock_report', 'report_xlsx', 'uom', 'purchase', 'purchase_stock', 'repack_stock'],
+    'depends': [
+        'base', 'mail', 'web', 'product', 'stock', 'fjr_custom_stock', 'export_stock_report', 
+        'report_xlsx', 'uom', 'purchase', 'purchase_stock', 'repack_stock'
+    ],
     'data': [
         'security/inventory_security.xml',
         'security/ir.model.access.csv',
+        'data/data.xml',
         'wizards/wizard_inventory_laporan_hari_pengganti_view.xml',
         'wizards/wizard_buat_laporan_harian_picking_view.xml',
+        'wizards/wizard_laporan_sparepart_bulanan_view.xml',
         'views/product_template_views.xml',
         'views/stock_picking_views.xml',
         'views/stock_move_line_inherit_view.xml',
@@ -30,6 +35,7 @@
         'reports/bukti_terima_barang_pdf_report_inventory.xml',
     ],
     'assets': {
+        "web._assets_primary_variables": [],
         'web.assets_backend': [
             'hd_inventory_custom/static/src/js/purchase_order_list.js',
             'hd_inventory_custom/static/src/js/purchase_date_search.js',
