@@ -49,4 +49,15 @@
         <field name="report_file">laporan_sparepart</field>
         <field name="binding_model_id" ref="model_wizard_laporan_sparepart_bulanan"/>
     </record>    
+
+    <record id="action_report_stock_persediaan" model="ir.actions.report">
+        <field name="name">Report Stok Persediaan</field>
+        <field name="model">stock.quant</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">hd_inventory_custom.stok_persediaan_report</field>
+        <field name="report_file">hd_inventory_custom.stok_persediaan_report</field>
+        <field name="paperformat_id" ref="hd_inventory_custom.paperformat_landscape_laporan_persediaan"/>
+        <field name="binding_model_id" ref="stock.model_stock_quant"/>
+        <field name="binding_type">report</field>
+    </record>    
 </odoo>

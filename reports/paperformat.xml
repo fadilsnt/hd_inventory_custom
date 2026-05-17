@@ -27,4 +27,18 @@
         <field name="header_spacing">17</field>
         <field name="dpi">94</field>
     </record>         
+
+    <record id="paperformat_landscape_laporan_persediaan" model="report.paperformat">
+        <field name="name">Landscape A4 - Laporan Persediaan</field>
+        <field name="default" eval="False"/>
+        <field name="format">A4</field>
+        <field name="orientation">Landscape</field>
+        <field name="margin_top">25</field>
+        <field name="margin_bottom">10</field>
+        <field name="margin_left">10</field>
+        <field name="margin_right">10</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">14</field>
+        <field name="dpi">94</field>        
+    </record>    
 </odoo>
