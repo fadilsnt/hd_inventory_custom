@@ -649,25 +649,52 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 products = sorted(product_per_oven.keys())
 
                 for product_name in products:
-                    sheet.write(row, 0, product_name, fmt_grade)
-                    col = 1
+                    max_lines = 1
+
+                    oven_grouped_data = {}
 
                     for oven in oven_list:
-                        items = product_per_oven[product_name].get(oven)
+                        items = product_per_oven[product_name].get(oven, [])
+                        grouped = {}
 
-                        if items:
-                            qty_str = " | ".join(str(fmt_qty(i["qty"])) for i in items)
-                            uom_str = " | ".join(i["uom"] for i in items)
+                        for item in items:
+                            grouped.setdefault(item["uom"], [])
+                            grouped[item["uom"]].append(item["qty"])
 
-                            sheet.write(row, col, qty_str, fmt_number)
-                            sheet.write(row, col + 1, uom_str, fmt_text_center)
-                        else:
-                            sheet.write(row, col, "-", fmt_number)
-                            sheet.write(row, col + 1, "-", fmt_text_center)
+                        grouped_list = [
+                            {
+                                "uom": uom,
+                                "qty_str": " | ".join(str(fmt_qty(q)) for q in qtys)
+                            }
+                            for uom, qtys in grouped.items()
+                        ]
 
-                        col += 2
+                        oven_grouped_data[oven] = grouped_list
 
-                    row += 1
+                        if len(grouped_list) > max_lines:
+                            max_lines = len(grouped_list)
+
+                    for line_index in range(max_lines):
+                        sheet.write(row + line_index, 0, product_name, fmt_grade)
+
+                        col = 1
+
+                        for oven in oven_list:
+                            grouped_list = oven_grouped_data.get(oven, [])
+
+                            if line_index < len(grouped_list):
+                                data = grouped_list[line_index]
+                                qty_str = data["qty_str"]
+                                uom_str = data["uom"]
+
+                                sheet.write(row + line_index, col, qty_str, fmt_number)
+                                sheet.write(row + line_index, col + 1, uom_str, fmt_text_center)
+                            else:
+                                sheet.write(row + line_index, col, "-", fmt_number)
+                                sheet.write(row + line_index, col + 1, "-", fmt_text_center)
+
+                            col += 2
+                    row += max_lines
 
             # ================= TOTAL ROW =================
             sheet.write(row, 0, "TOTAL QTY (KG)", fmt_header)
@@ -739,38 +766,47 @@ class InventoryLaporanHariPenggantiXlsx(models.AbstractModel):
                 for p_name, p_data in sorted(aggregated_special.items()):
                     category = p_data.get("category", "-")
 
-                    total_qty = {}         # qty asli
-                    total_weighted = {}    # qty * weight
+                    # ============================================
+                    # uom -> data
+                    # ============================================
+                    uom_data = {}
 
                     for o in ovens:
                         if o.get("product_category") != category:
                             continue
 
                         for p in o.get("products", []):
-                            if p.get("product") == p_name:
-                                qty = p.get("qty", 0)
-                                uom = o.get("uom_category")
-                                is_cl = p.get("is_cl", False)
+                            if p.get("product") != p_name:
+                                continue
 
-                                weight = o.get("weight_per_uom_category", 1)
+                            qty = p.get("qty", 0)
+                            uom = o.get("uom_category")
+                            is_cl = p.get("is_cl", False)
+                            weight = o.get("weight_per_uom_category", 1)
+                            value = qty if is_cl else qty * weight
 
-                                # ================= QTY =================
-                                total_qty[uom] = total_qty.get(uom, 0) + qty
+                            if uom not in uom_data:
+                                uom_data[uom] = {
+                                    "qty": 0,
+                                    "total": 0,
+                                }
 
-                                # ================= TOTAL =================
-                                value = qty if is_cl else qty * weight
-                                total_weighted[uom] = total_weighted.get(uom, 0) + value
+                            uom_data[uom]["qty"] += qty
+                            uom_data[uom]["total"] += value
 
-                    # ================= FORMAT =================
-                    qty_str = " | ".join(fmt_qty(v) for v in total_qty.values())
-                    total_str = " | ".join(fmt_qty(v) for v in total_weighted.values())
+                    # ============================================
+                    # WRITE ROW PER UOM
+                    # ============================================
+                    for uom, vals in sorted(uom_data.items()):
+                        qty = vals["qty"]
+                        total = vals["total"]
 
-                    sheet.write(grade_row, grade_col_start, p_name, fmt_text_center)
-                    sheet.write(grade_row, grade_col_start + 1, qty_str, fmt_number)          # ✅ qty asli
-                    sheet.write(grade_row, grade_col_start + 2, total_str, fmt_grade_total)   # ✅ sudah dikali weight
-                    sheet.write(grade_row, grade_col_start + 3, category, fmt_grade)
+                        sheet.write(grade_row, grade_col_start, p_name, fmt_text_center)
+                        sheet.write(grade_row, grade_col_start + 1, fmt_qty(qty), fmt_number)
+                        sheet.write(grade_row, grade_col_start + 2, fmt_qty(total), fmt_grade_total)
+                        sheet.write(grade_row, grade_col_start + 3, uom, fmt_grade)
 
-                    grade_row += 1
+                        grade_row += 1
 
             # ================= TOTAL SELURUH GRADE & RATA-RATA =================
             total_all_grades = 0

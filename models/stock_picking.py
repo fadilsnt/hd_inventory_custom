@@ -27,7 +27,7 @@ class StockPicking(models.Model):
     return_picking_ids = fields.One2many('stock.picking', 'origin_picking_id', string="Return Pickings")    
     return_count = fields.Integer(string="Return Count", compute="_compute_return_count")
     origin_picking_id = fields.Many2one('stock.picking', string="Origin Pickings")
-  
+
     def _compute_return_count(self):
         for rec in self:
             rec.return_count = self.env['stock.picking'].search_count([('origin_picking_id', '=', rec.id)])    

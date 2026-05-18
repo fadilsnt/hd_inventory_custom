@@ -43,7 +43,11 @@
             'hd_inventory_custom/static/src/js/purchase_date_search.js',
             'hd_inventory_custom/static/src/js/purchase_dashboard.js',
             'hd_inventory_custom/static/src/xml/purchase_dashboard.xml',
+            'hd_inventory_custom/static/src/css/header.css',
+            'hd_inventory_custom/static/src/one2manysearch/one2manysearch.js',
+            'hd_inventory_custom/static/src/one2manysearch/one2manysearch_template.xml',            
         ],
+        
     },    
     'phone': "085156534679",
 }

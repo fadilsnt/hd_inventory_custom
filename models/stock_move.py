@@ -41,3 +41,21 @@ class StockMove(models.Model):
             vals['name'] = product.display_name
 
         return super().write(vals)    
+    
+    def _recompute_quantities(self):
+        for move in self:
+            total_qty = sum(
+                move.move_line_ids.filtered(
+                    lambda l: l.state != 'cancel'
+                ).mapped('quantity')
+            )
+
+            move.sudo().with_context(
+                tracking_disable=True,
+                mail_notrack=True,
+                mail_create_nosubscribe=True,
+                mail_auto_subscribe_no_notify=True,
+                mail_post_autofollow=False,
+            ).update({
+                'product_uom_qty': total_qty
+            })

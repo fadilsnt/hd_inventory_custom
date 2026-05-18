@@ -31,7 +31,6 @@ class StockMoveLine(models.Model):
 
     @api.model
     def create(self, vals):
-        # 🔑 jangan override kalau dari wizard
         if not vals.get('from_wizard'):
             if not vals.get('product_uom_id') and vals.get('product_id'):
                 product = self.env['product.product'].browse(vals['product_id'])
@@ -43,6 +42,75 @@ class StockMoveLine(models.Model):
                     vals['product_uom_id'] = product.uom_id.id
 
         return super().create(vals)
+
+    def _find_or_create_move(self, product_uom_id):
+        self.ensure_one()
+
+        Move = self.env['stock.move']
+
+        move = Move.search([
+            ('picking_id', '=', self.picking_id.id),
+            ('product_id', '=', self.product_id.id),
+            ('product_uom', '=', product_uom_id),
+            ('state', 'not in', ('done', 'cancel')),
+        ], limit=1)
+
+        if move:
+            return move
+
+        return Move.sudo().with_context(
+            tracking_disable=True,
+            mail_notrack=True,
+            mail_create_nosubscribe=True,
+        ).create({
+            'name': self.product_id.display_name,
+            'product_id': self.product_id.id,
+            'product_uom_qty': 0,
+            'product_uom': product_uom_id,
+            'picking_id': self.picking_id.id,
+            'location_id': self.location_id.id,
+            'location_dest_id': self.location_dest_id.id,
+        })        
+    
+    def write(self, vals):
+        old_moves = self.mapped('move_id')
+        uom_changed = 'product_uom_id' in vals
+
+        res = super().write(vals)
+
+        # =================================================
+        # PINDAH MOVE JIKA UOM BERUBAH
+        # =================================================
+        if uom_changed:
+            for line in self:
+
+                target_move = line._find_or_create_move(
+                    line.product_uom_id.id
+                )
+
+                if line.move_id != target_move:
+                    line.sudo().with_context(
+                        tracking_disable=True,
+                        mail_notrack=True,
+                        mail_create_nosubscribe=True,
+                    ).write({
+                        'move_id': target_move.id
+                    })
+
+        # =================================================
+        # RECOMPUTE QTY
+        # =================================================
+        all_moves = old_moves | self.mapped('move_id')
+        all_moves._recompute_quantities()
+
+        return res
+
+    def unlink(self):
+        moves = self.mapped('move_id')
+        res = super().unlink()
+        moves._recompute_quantities()
+
+        return res
 
     @api.constrains('product_uom_id', 'product_id')
     def _check_uom_category(self):

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates>
+
+    <t t-name="One2ManySearchTemplate"
+       t-inherit="web.X2ManyField"
+       t-inherit-mode="primary"
+       owl="1">
+        <t t-if="displayControlPanelButtons" position="replace">
+            <div class="o_hd_o2m_search_container d-flex align-items-center mb-2">
+                <div class="o_hd_search_icon">
+                    <i class="fa fa-search"/>
+                </div>
+
+                <input type="text"
+                       class="o_hd_o2m_search_input"
+                       placeholder="Search data..."
+                       t-ref="search_keyword"
+                       t-on-keyup="onInputKeyUp"/>
+            </div>
+        </t>
+    </t>
+</templates>
